@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>THROWN — an art history reflex quiz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================
+     THEME TOKENS — semantic names only. Dark is default;
+     [data-theme="light"] overrides the same variables.
+     ============================================================ */
+  :root{
+    --bg:#14181c;
+    --bg-glow-1:#1c2830;
+    --bg-glow-2:#241c1c;
+    --surface:#1c2329;
+    --surface-2:#242c33;
+    --text:#ede6d8;
+    --text-dim:#b9b2a3;
+    --accent:#c9a24b;
+    --accent-dim:#8f7738;
+    --accent-ink:#20180a;
+    --success:#6b9c7d;
+    --success-bg:#1e2a22;
+    --success-text:#a9cdb5;
+    --danger:#c1684f;
+    --danger-bg:#2a201d;
+    --border:#333d45;
+    --radius:14px;
+    color-scheme: dark;
+  }
+  [data-theme="light"]{
+    --bg:#f3efe3;
+    --bg-glow-1:#f3efe3;
+    --bg-glow-2:#f3efe3;
+    --surface:#ffffff;
+    --surface-2:#f2ede0;
+    --text:#221b10;
+    --text-dim:#6f6656;
+    --accent:#a9781f;
+    --accent-dim:#8a611a;
+    --accent-ink:#fffaf0;
+    --success:#3c7856;
+    --success-bg:#e4efe8;
+    --success-text:#1f5238;
+    --danger:#a8452f;
+    --danger-bg:#f6e6e1;
+    --border:#e1d9c6;
+    color-scheme: light;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 600px at 15% -10%, var(--bg-glow-1) 0%, transparent 60%),
+      radial-gradient(1000px 700px at 110% 10%, var(--bg-glow-2) 0%, transparent 55%),
+      var(--bg);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    min-height:100vh;
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    padding:28px 16px 64px;
+    transition:background-color .2s ease, color .2s ease;
+  }
+  .app{ width:100%; max-width:720px; }
+
+  /* ---------- header ---------- */
+  .masthead{
+    display:flex;
+    align-items:flex-end;
+    justify-content:space-between;
+    border-bottom:1px solid var(--border);
+    padding-bottom:14px;
+    margin-bottom:22px;
+    gap:14px;
+    flex-wrap:wrap;
+  }
+  .wordmark{
+    font-family:'Fraunces', serif;
+    font-weight:700;
+    font-size:clamp(26px,5.6vw,36px);
+    letter-spacing:0.5px;
+    color:var(--text);
+    margin:0;
+    cursor:pointer;
+  }
+  .wordmark em{ color:var(--accent); font-style:normal; }
+
+  .stat-block{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  .hearts-row{ display:none; gap:3px; }
+  .heart-slot{ position:relative; width:18px; height:16px; flex:none; }
+  .heart-slot svg{ position:absolute; top:0; left:0; width:18px; height:16px; }
+  .heart-front-wrap{ position:absolute; top:0; left:0; height:16px; overflow:hidden; }
+  .score-mono{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12.5px; color:var(--text-dim); text-align:right; line-height:1.5;
+    text-transform:uppercase; letter-spacing:0.5px;
+  }
+  .score-mono b{ color:var(--accent); font-weight:600; }
+
+  .icon-btn{
+    width:34px; height:34px; flex:none;
+    display:flex; align-items:center; justify-content:center;
+    border-radius:50%;
+    border:1px solid var(--border);
+    background:var(--surface);
+    color:var(--text-dim);
+    cursor:pointer;
+    transition:border-color .12s, color .12s;
+  }
+  .icon-btn:hover{ border-color:var(--accent-dim); color:var(--text); }
+  .icon-btn svg{ width:16px; height:16px; }
+
+  .account-chip{
+    font-family:'Inter'; font-weight:600; font-size:12.5px;
+    padding:8px 14px; border-radius:100px;
+    border:1px solid var(--border);
+    background:var(--surface);
+    color:var(--text-dim);
+    cursor:pointer;
+    white-space:nowrap;
+    transition:border-color .12s, color .12s;
+  }
+  .account-chip:hover{ border-color:var(--accent-dim); color:var(--text); }
+
+  /* ---------- generic panel ---------- */
+  .panel{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:26px;
+  }
+
+  .btn{
+    font-family:'Inter'; font-weight:600; font-size:15px;
+    padding:14px 26px;
+    border-radius:10px;
+    border:none;
+    cursor:pointer;
+    transition:transform .12s ease, filter .12s ease;
+  }
+  .btn:active{ transform:scale(0.98); }
+  .btn:focus-visible{ outline:2px solid var(--text); outline-offset:3px; }
+  .btn-primary{ background:var(--accent); color:var(--accent-ink); }
+  .btn-primary:hover{ filter:brightness(1.08); }
+  .btn-ghost{ background:transparent; color:var(--text); border:1px solid var(--border); }
+  .btn-ghost:hover{ border-color:var(--text-dim); }
+
+  /* ---------- hero (landing) ---------- */
+  .hero{ padding:48px 30px; text-align:left; }
+  .hero-title{
+    font-family:'Fraunces', serif; font-weight:700;
+    font-size:clamp(32px,7vw,50px); line-height:1.08; margin:0 0 14px;
+  }
+  .hero-title em{ color:var(--accent); font-style:normal; }
+  .hero-lede{ font-size:15.5px; color:var(--text-dim); margin:0 0 28px; }
+
+  /* ---------- stage (modes / rules) ---------- */
+  .stage-title{
+    font-family:'Fraunces', serif; font-weight:600;
+    font-size:clamp(22px,4vw,27px); margin:0 0 20px;
+  }
+  .stage-actions{ display:flex; justify-content:space-between; align-items:center; margin-top:22px; }
+  .stage-footnote{ font-size:12.5px; color:var(--text-dim); margin:16px 0 0; }
+
+  .mode-list{ display:flex; flex-direction:column; }
+  .mode-item{
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    text-align:left; background:none; border:none;
+    border-bottom:1px solid var(--border);
+    padding:16px 0;
+    font-family:'Inter'; color:var(--text);
+    cursor:pointer;
+  }
+  .mode-item:first-child{ padding-top:0; }
+  .mode-item:last-child{ border-bottom:none; padding-bottom:0; }
+  .mode-item:disabled{ cursor:default; }
+  .mode-main{ display:flex; flex-direction:column; gap:2px; }
+  .mode-name{ font-family:'Fraunces', serif; font-weight:600; font-size:17px; }
+  .mode-item:disabled .mode-name{ color:var(--text-dim); }
+  .mode-desc{ font-size:13px; color:var(--text-dim); }
+  .mode-arrow{ color:var(--accent); font-size:16px; flex:none; }
+  .mode-tag{
+    font-family:'IBM Plex Mono', monospace; font-size:10.5px; letter-spacing:1px; text-transform:uppercase;
+    color:var(--text-dim); border:1px solid var(--border); border-radius:100px; padding:4px 10px; flex:none;
+  }
+
+  .rules-list{ margin:0 0 8px; padding:0; list-style:none; border-top:1px solid var(--border); }
+  .rules-list li{
+    font-size:14px; color:var(--text-dim);
+    padding:11px 0; border-bottom:1px solid var(--border);
+  }
+  .rules-list li b{ color:var(--text); font-family:'Fraunces', serif; font-weight:600; font-size:14.5px; }
+
+  /* ---------- loading ---------- */
+  .loading{ display:flex; flex-direction:column; align-items:center; gap:16px; padding:70px 20px; text-align:center; }
+  .spinner{
+    width:34px; height:34px; border-radius:50%;
+    border:3px solid var(--border); border-top-color:var(--accent);
+    animation:spin 0.9s linear infinite;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  .loading p{ color:var(--text-dim); font-family:'IBM Plex Mono',monospace; font-size:13px; text-transform:uppercase; letter-spacing:0.5px; }
+
+  /* ---------- easel ---------- */
+  .easel{
+    position:relative;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:22px;
+    margin-bottom:16px;
+    overflow:hidden;
+  }
+  .frame{
+    position:relative;
+    display:flex; align-items:center; justify-content:center;
+    background:#0d1013;
+    border-radius:8px;
+    min-height:280px;
+    overflow:hidden;
+  }
+  [data-theme="light"] .frame{ background:#e9e2d0; }
+  .frame img{
+    display:block;
+    max-width:100%;
+    max-height:54vh;
+    opacity:0;
+    transform:translateY(26px) rotate(-2.5deg) scale(0.94);
+  }
+  .frame img.thrown{ animation:throwIn .55s cubic-bezier(.2,.9,.3,1.2) forwards; }
+  @keyframes throwIn{
+    0%{ opacity:0; transform:translateY(26px) rotate(-2.5deg) scale(0.94); }
+    60%{ opacity:1; transform:translateY(-4px) rotate(1.1deg) scale(1.01); }
+    100%{ opacity:1; transform:translateY(0) rotate(0deg) scale(1); }
+  }
+  @media (prefers-reduced-motion: reduce){ .frame img.thrown{ animation:none; opacity:1; transform:none; } }
+
+  .badge{
+    position:absolute; top:14px; right:14px;
+    font-family:'IBM Plex Mono', monospace; font-size:12px; font-weight:600;
+    text-transform:uppercase; letter-spacing:0.5px;
+    padding:6px 12px; border-radius:100px;
+    opacity:0; transform:translateY(-6px);
+    transition:opacity .2s, transform .2s;
+    border:1px solid transparent;
+  }
+  .badge.show{ opacity:1; transform:translateY(0); }
+  .badge.full{ background:var(--success-bg); color:var(--success); border-color:var(--success); }
+  .badge.partial{ background:var(--surface-2); color:var(--accent); border-color:var(--accent); }
+  .badge.miss{ background:var(--danger-bg); color:var(--danger); border-color:var(--danger); }
+
+  .question{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:clamp(18px,3.2vw,22px);
+    margin:4px 2px 16px;
+    color:var(--text);
+  }
+
+  .choices{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  @media (max-width:520px){ .choices{ grid-template-columns:1fr; } }
+
+  .choice{
+    position:relative;
+    text-align:left;
+    font-family:'Inter';
+    color:var(--text);
+    background:var(--surface-2);
+    border:1.5px solid var(--border);
+    border-radius:10px;
+    padding:13px 15px;
+    cursor:pointer;
+    display:flex; flex-direction:column; gap:3px;
+    transition:border-color .12s, background .12s;
+  }
+  .choice:hover:not(:disabled){ border-color:var(--accent-dim); }
+  .choice:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  .choice-artist{ font-weight:600; font-size:14.5px; }
+  .choice-era{ font-size:12.5px; color:var(--text-dim); }
+  .choice.selected{ box-shadow:0 0 0 2px var(--text) inset; }
+  .choice.opt-full{ border-color:var(--success); background:var(--success-bg); }
+  .choice.opt-full .choice-era{ color:var(--success-text); }
+  .choice.opt-partial{ border-color:var(--accent); background:var(--surface-2); }
+  .choice.opt-miss{ border-color:var(--danger); background:var(--danger-bg); opacity:0.8; }
+  .choice:disabled{ cursor:default; }
+
+  /* ---------- placard ---------- */
+  .placard{ margin-top:16px; padding:18px 20px; border-radius:10px; border:1px solid var(--border); background:var(--surface-2); display:none; }
+  .placard.show{ display:block; animation:fadeUp .3s ease-out; }
+  @keyframes fadeUp{ from{ opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);} }
+  .placard-verdict{ font-family:'IBM Plex Mono', monospace; font-size:11.5px; letter-spacing:1.2px; text-transform:uppercase; margin-bottom:8px; }
+  .placard-verdict.full{ color:var(--success); }
+  .placard-verdict.partial{ color:var(--accent); }
+  .placard-verdict.miss{ color:var(--danger); }
+  .placard-title{ font-family:'Fraunces', serif; font-weight:600; font-size:17px; margin:0 0 4px; }
+  .placard-meta{ color:var(--text-dim); font-size:13.5px; line-height:1.6; margin-bottom:12px; }
+
+  .learn-label{ font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--accent-dim); margin-bottom:8px; }
+  .learn-chips{ display:flex; flex-wrap:wrap; gap:7px; }
+  .learn-chip{
+    font-size:12.5px; font-family:'Inter'; font-weight:500;
+    padding:6px 12px; border-radius:100px;
+    border:1px solid var(--border); background:var(--surface);
+    color:var(--text-dim); text-decoration:none;
+    display:inline-flex; align-items:center; gap:5px;
+    transition:border-color .12s, color .12s;
+  }
+  .learn-chip:hover{ border-color:var(--accent); color:var(--text); }
+
+  .next-row{ display:flex; justify-content:flex-end; margin-top:18px; }
+
+  /* ---------- game over ---------- */
+  .end-score{ font-family:'Fraunces', serif; font-weight:700; font-size:clamp(46px,9vw,68px); color:var(--accent); margin:6px 0 0; line-height:1; }
+  .end-label{ font-family:'IBM Plex Mono',monospace; font-size:12.5px; letter-spacing:1.5px; text-transform:uppercase; color:var(--text-dim); }
+  .end-sub{ color:var(--text-dim); font-size:14.5px; margin:14px 0 26px; }
+  .end-actions{ display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+
+  .error-box{ color:var(--danger); font-size:14px; line-height:1.6; }
+
+  footer.credit{ margin-top:24px; text-align:center; font-size:11.5px; color:var(--text-dim); font-family:'IBM Plex Mono',monospace; }
+
+  /* ---------- account modal (stub) ---------- */
+  .modal-backdrop{
+    position:fixed; inset:0; background:rgba(0,0,0,0.55);
+    display:flex; align-items:center; justify-content:center; padding:20px;
+    z-index:50;
+  }
+  .modal{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:28px; max-width:360px; width:100%;
+  }
+  .modal h2{ font-family:'Fraunces', serif; font-size:20px; margin:0 0 10px; }
+  .modal p{ color:var(--text-dim); font-size:14px; line-height:1.6; margin:0 0 20px; }
+  .modal-close{ display:flex; justify-content:flex-end; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="masthead">
+    <h1 class="wordmark" id="wordmark">THR<em>O</em>WN</h1>
+    <div class="stat-block">
+      <div class="hearts-row" id="hearts"></div>
+      <div class="score-mono" id="scoreReadout"></div>
+      <button class="account-chip" id="accountBtn" type="button">Sign in</button>
+      <button class="icon-btn" id="themeBtn" type="button" aria-label="Toggle light and dark mode"></button>
+    </div>
+  </div>
+
+  <div id="screen"></div>
+
+  <footer class="credit">Artworks via the Art Institute of Chicago, the Met, and the Cleveland Museum of Art. Public domain only.</footer>
+</div>
+
+<div id="modalRoot"></div>
+
+<script>
+(function(){
+
+  /* ============================================================
+     CONTENT CONFIG — edit copy here, not in the render functions.
+     ============================================================ */
+  const LANDING = {
+    title: "Art, <em>thrown</em> at you.",
+    lede: "Guess the artist. Guess the movement.",
+    ctaLabel: "Enter the gallery →"
+  };
+
+  const MODES = [
+    { id:'classic', name:'Classic Quiz', desc:'Name the artist and the movement.', available:true },
+    { id:'color', name:'Color Picker', desc:'', available:false },
+    { id:'captcha', name:'CAPTCHA', desc:'', available:false },
+    { id:'time', name:'Time Attack', desc:'', available:false }
+  ];
+
+  const RULES = {
+    classic: {
+      title: 'Classic Quiz',
+      items: [
+        '10 hearts',
+        'Both correct — no damage',
+        'One correct — −½ heart',
+        'Both wrong — −1 heart',
+        'Runs until 0. Beat your best.'
+      ]
+    }
+  };
+
+  /* ============================================================
+     THEME
+     ============================================================ */
+  const Theme = {
+    STORAGE_KEY: 'thrown-theme',
+    current: 'dark',
+    async init(){
+      let saved = null;
+      try{
+        if(window.storage){
+          const r = await window.storage.get(this.STORAGE_KEY, false);
+          if(r && r.value) saved = r.value;
+        }
+      } catch(e){}
+      if(!saved){
+        saved = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark';
+      }
+      this.apply(saved);
+    },
+    apply(mode){
+      this.current = mode;
+      if(mode === 'light'){ document.documentElement.setAttribute('data-theme', 'light'); }
+      else { document.documentElement.removeAttribute('data-theme'); }
+      this.renderIcon();
+    },
+    async toggle(){
+      const next = this.current === 'light' ? 'dark' : 'light';
+      this.apply(next);
+      try{ if(window.storage){ await window.storage.set(this.STORAGE_KEY, next, false); } }
+      catch(e){}
+    },
+    renderIcon(){
+      const btn = document.getElementById('themeBtn');
+      if(!btn) return;
+      btn.innerHTML = this.current === 'light'
+        ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>'
+        : '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg>';
+    }
+  };
+
+  /* ============================================================
+     AUTH (stub) — the seam where a real login flow attaches.
+     Everything that needs "who is playing" goes through this
+     object, so a real provider can replace it without touching
+     the game or score logic.
+     ============================================================ */
+  const Auth = {
+    ENABLED: false,
+    user: null,
+    isLoggedIn(){ return !!this.user; },
+    getUser(){ return this.user; },
+    async openLogin(){
+      showModal({
+        title: 'Coming soon',
+        body: "Accounts aren't live yet. Your best score is saved on this device."
+      });
+    },
+    renderAccountChip(){
+      const btn = document.getElementById('accountBtn');
+      if(!btn) return;
+      btn.textContent = this.isLoggedIn() ? this.user.name : 'Sign in';
+      btn.onclick = () => this.isLoggedIn() ? null : this.openLogin();
+    }
+  };
+
+  function showModal({ title, body }){
+    const root = document.getElementById('modalRoot');
+    root.innerHTML = `
+      <div class="modal-backdrop" id="modalBackdrop">
+        <div class="modal">
+          <h2>${title}</h2>
+          <p>${body}</p>
+          <div class="modal-close"><button class="btn btn-ghost" id="modalCloseBtn">Close</button></div>
+        </div>
+      </div>`;
+    document.getElementById('modalCloseBtn').addEventListener('click', closeModal);
+    document.getElementById('modalBackdrop').addEventListener('click', (e) => {
+      if(e.target.id === 'modalBackdrop') closeModal();
+    });
+  }
+  function closeModal(){ document.getElementById('modalRoot').innerHTML = ''; }
+
+  /* ============================================================
+     SCORE STORE — abstracts where the best score lives. Local
+     storage today; getBest/setBest are the only two functions
+     that need to start talking to a backend once accounts exist.
+     ============================================================ */
+  const ScoreStore = {
+    LOCAL_KEY: 'thrown-best-score',
+    // TODO(auth migration): on first login, read the local best via
+    // getBest() before Auth.user is set, compare it to the account's
+    // stored best, and keep whichever is higher. Do this once, right
+    // after login succeeds, then let getBest/setBest talk to the
+    // backend exclusively for that session.
+    async getBest(){
+      try{
+        if(window.storage){
+          const r = await window.storage.get(this.LOCAL_KEY, false);
+          if(r && r.value) return parseInt(r.value, 10) || 0;
+        }
+      } catch(e){}
+      return 0;
+    },
+    async setBest(n){
+      try{ if(window.storage){ await window.storage.set(this.LOCAL_KEY, String(n), false); } }
+      catch(e){}
+    }
+  };
+
+  /* ============================================================
+     MUSEUM DATA SOURCES
+     ============================================================ */
+  const TERMS = [
+    "Impressionism","Post-Impressionism","Cubism","Surrealism","Baroque",
+    "Ukiyo-e","Abstract Expressionism","Realism","Romanticism","Renaissance",
+    "Expressionism","Neoclassicism"
+  ];
+  const HEART_PATH = "M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z";
+
+  const state = {
+    screen: 'landing',
+    mode: null,
+    pool: [],
+    usedKeys: new Set(),
+    health: 10,
+    correctCount: 0,
+    best: 0,
+    current: null,
+    answered: false,
+    termCursor: 0
+  };
+
+  const screenEl = document.getElementById('screen');
+  const heartsEl = document.getElementById('hearts');
+  const scoreEl = document.getElementById('scoreReadout');
+
+  function pickRandom(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+  function shuffle(arr){ return arr.sort(()=>Math.random()-0.5); }
+
+  // ---------------- HEADER ----------------
+  function renderHearts(){
+    let html = '';
+    for(let i=0;i<10;i++){
+      const remaining = Math.max(0, Math.min(1, state.health - i));
+      const widthPx = (remaining*18).toFixed(1);
+      html += `<span class="heart-slot">
+        <svg viewBox="0 0 24 24"><path d="${HEART_PATH}" fill="var(--border)"/></svg>
+        <span class="heart-front-wrap" style="width:${widthPx}px">
+          <svg viewBox="0 0 24 24" style="width:18px;height:16px;"><path d="${HEART_PATH}" fill="var(--danger)"/></svg>
+        </span>
+      </span>`;
+    }
+    heartsEl.innerHTML = html;
+  }
+  function updateHeader(){
+    const inGame = state.screen === 'round' || state.screen === 'gameover';
+    heartsEl.style.display = inGame ? 'flex' : 'none';
+    if(inGame) renderHearts();
+    scoreEl.innerHTML = inGame ? `Correct <b>${state.correctCount}</b> · Best <b>${state.best}</b>` : '';
+    Auth.renderAccountChip();
+  }
+
+  // ---------------- FETCH: AIC ----------------
+  async function fetchAIC(term){
+    const fields = 'id,title,artist_title,style_title,date_display,image_id,place_of_origin';
+    const url = `https://api.artic.edu/api/v1/artworks/search?q=${encodeURIComponent(term)}`
+      + `&query[term][is_public_domain]=true&fields=${fields}&limit=25`;
+    try{
+      const res = await fetch(url);
+      if(!res.ok) return [];
+      const data = await res.json();
+      const needle = term.toLowerCase();
+      return (data.data || [])
+        .filter(a => a.image_id && a.artist_title && a.style_title)
+        .filter(a => a.style_title.toLowerCase().includes(needle))
+        .map(a => ({
+          key: `aic-${a.id}`,
+          title: a.title || 'Untitled',
+          artist: a.artist_title,
+          era: a.style_title,
+          date: a.date_display || '',
+          origin: a.place_of_origin || '',
+          img: `https://www.artic.edu/iiif/2/${a.image_id}/full/700,/0/default.jpg`,
+          source: 'Art Institute of Chicago',
+          sourceUrl: `https://www.artic.edu/artworks/${a.id}`,
+          sourceSearchUrl: `https://www.artic.edu/collection?q=${encodeURIComponent(a.artist_title)}`
+        }));
+    } catch(e){ return []; }
+  }
+
+  // ---------------- FETCH: CLEVELAND ----------------
+  async function fetchCleveland(term){
+    const url = `https://openaccess-api.clevelandart.org/api/artworks/?q=${encodeURIComponent(term)}&has_image=1&limit=25`;
+    try{
+      const res = await fetch(url);
+      if(!res.ok) return [];
+      const data = await res.json();
+      const needle = term.toLowerCase();
+      return (data.data || [])
+        .map(a => {
+          const creator = a.creators && a.creators[0] ? a.creators[0].description : null;
+          const artist = creator ? creator.split(' (')[0].trim() : null;
+          const era = (a.culture && a.culture[0]) || a.type || null;
+          const img = (a.images && (a.images.web || a.images.print)) ? (a.images.web ? a.images.web.url : a.images.print.url) : null;
+          return { a, artist, era, img };
+        })
+        .filter(x => x.img && x.artist && x.era && x.era.toLowerCase().includes(needle))
+        .map(x => ({
+          key: `cma-${x.a.id}`,
+          title: x.a.title || 'Untitled',
+          artist: x.artist,
+          era: x.era,
+          date: x.a.creation_date || '',
+          origin: '',
+          img: x.img,
+          source: 'Cleveland Museum of Art',
+          sourceUrl: `https://www.clevelandart.org/art/${x.a.id}`,
+          sourceSearchUrl: `https://www.clevelandart.org/art/collection/search?search_api_fulltext=${encodeURIComponent(x.artist)}`
+        }));
+    } catch(e){ return []; }
+  }
+
+  // ---------------- FETCH: MET (background only, slower) ----------------
+  async function fetchMet(term){
+    try{
+      const searchUrl = `https://collectionapi.metmuseum.org/public/collection/v1/search?hasImages=true&q=${encodeURIComponent(term)}`;
+      const res = await fetch(searchUrl);
+      if(!res.ok) return [];
+      const data = await res.json();
+      const ids = (data.objectIDs || []).slice(0, 12);
+      if(!ids.length) return [];
+      const details = await Promise.all(ids.map(id =>
+        fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${id}`)
+          .then(r => r.ok ? r.json() : null)
+          .catch(() => null)
+      ));
+      const needle = term.toLowerCase();
+      return details
+        .filter(Boolean)
+        .map(o => {
+          const era = o.period || o.culture || o.classification || o.dynasty || null;
+          const img = o.primaryImageSmall || o.primaryImage || null;
+          return { o, era, img };
+        })
+        .filter(x => x.o.isPublicDomain && x.img && x.o.artistDisplayName && x.era && x.era.toLowerCase().includes(needle))
+        .map(x => ({
+          key: `met-${x.o.objectID}`,
+          title: x.o.title || 'Untitled',
+          artist: x.o.artistDisplayName,
+          era: x.era,
+          date: x.o.objectDate || '',
+          origin: x.o.country || '',
+          img: x.img,
+          source: 'The Metropolitan Museum of Art',
+          sourceUrl: x.o.objectURL || `https://www.metmuseum.org/art/collection/search/${x.o.objectID}`,
+          sourceSearchUrl: `https://www.metmuseum.org/art/collection/search?q=${encodeURIComponent(x.o.artistDisplayName)}`
+        }));
+    } catch(e){ return []; }
+  }
+
+  // ---------------- POOL MANAGEMENT ----------------
+  function addToPool(items){
+    if(!items || !items.length) return;
+    const existing = new Set(state.pool.map(a => a.key));
+    items.forEach(a => { if(!existing.has(a.key)){ state.pool.push(a); existing.add(a.key); } });
+  }
+
+  function topUpIfLow(){
+    const remaining = state.pool.length - state.usedKeys.size;
+    if(remaining < 8){
+      const term = TERMS[state.termCursor % TERMS.length];
+      state.termCursor++;
+      fetchAIC(term).then(addToPool);
+      fetchCleveland(term).then(addToPool);
+      fetchMet(term).then(addToPool);
+    }
+  }
+
+  function backgroundFillRemaining(coveredTerms){
+    TERMS.forEach(t => {
+      if(!coveredTerms.includes(t)){
+        fetchAIC(t).then(addToPool);
+        fetchCleveland(t).then(addToPool);
+      }
+      fetchMet(t).then(addToPool);
+    });
+  }
+
+  // ---------------- SCREEN: LANDING ----------------
+  function renderLanding(){
+    state.screen = 'landing';
+    updateHeader();
+    screenEl.innerHTML = `
+      <div class="panel hero">
+        <h2 class="hero-title">${LANDING.title}</h2>
+        <p class="hero-lede">${LANDING.lede}</p>
+        <button class="btn btn-primary" id="startBtn">${LANDING.ctaLabel}</button>
+      </div>`;
+    document.getElementById('startBtn').addEventListener('click', renderModes);
+  }
+
+  // ---------------- SCREEN: MODES ----------------
+  function renderModes(){
+    state.screen = 'modes';
+    updateHeader();
+    screenEl.innerHTML = `
+      <div class="panel">
+        <h2 class="stage-title">Select a mode</h2>
+        <div class="mode-list" id="modeList"></div>
+        <p class="stage-footnote">More modes coming later.</p>
+      </div>`;
+    const list = document.getElementById('modeList');
+    MODES.forEach(m => {
+      const b = document.createElement('button');
+      b.className = 'mode-item';
+      b.disabled = !m.available;
+      b.innerHTML = `
+        <span class="mode-main">
+          <span class="mode-name">${m.name}</span>
+          ${m.desc ? `<span class="mode-desc">${m.desc}</span>` : ''}
+        </span>
+        ${m.available ? '<span class="mode-arrow">→</span>' : '<span class="mode-tag">Coming soon</span>'}`;
+      if(m.available) b.addEventListener('click', () => renderRules(m.id));
+      list.appendChild(b);
+    });
+  }
+
+  // ---------------- SCREEN: RULES ----------------
+  function renderRules(modeId){
+    state.screen = 'rules';
+    state.mode = modeId;
+    updateHeader();
+    const rules = RULES[modeId];
+    screenEl.innerHTML = `
+      <div class="panel">
+        <h2 class="stage-title">${rules.title}</h2>
+        <ul class="rules-list">${rules.items.map(i => `<li>${i}</li>`).join('')}</ul>
+        <div class="stage-actions">
+          <button class="btn btn-ghost" id="backBtn">← Back</button>
+          <button class="btn btn-primary" id="beginBtn">Begin →</button>
+        </div>
+      </div>`;
+    document.getElementById('backBtn').addEventListener('click', renderModes);
+    document.getElementById('beginBtn').addEventListener('click', startGame);
+  }
+
+  // ---------------- SCREEN: LOADING ----------------
+  function renderLoading(){
+    state.screen = 'loading';
+    updateHeader();
+    screenEl.innerHTML = `
+      <div class="panel loading">
+        <div class="spinner"></div>
+        <p>Loading the gallery</p>
+      </div>`;
+  }
+
+  function renderError(){
+    screenEl.innerHTML = `
+      <div class="panel">
+        <p class="error-box">Not enough public-domain artwork loaded.</p>
+        <button class="btn btn-ghost" id="backToModesBtn" style="margin-top:16px;">← Back</button>
+      </div>`;
+    document.getElementById('backToModesBtn').addEventListener('click', renderModes);
+  }
+
+  // ---------------- GAME START ----------------
+  async function startGame(){
+    renderLoading();
+    state.best = await ScoreStore.getBest();
+
+    if(state.pool.length < 4){
+      const initialTerms = TERMS.slice(0, 4);
+      const initialPromises = [];
+      initialTerms.forEach(t => {
+        initialPromises.push(fetchAIC(t).then(addToPool));
+        initialPromises.push(fetchCleveland(t).then(addToPool));
+      });
+      await Promise.allSettled(initialPromises);
+
+      if(state.pool.length < 4){
+        const morePromises = TERMS.slice(4).map(t => fetchAIC(t).then(addToPool));
+        await Promise.allSettled(morePromises);
+      }
+
+      if(state.pool.length < 4){
+        renderError();
+        return;
+      }
+
+      backgroundFillRemaining(initialTerms);
+    }
+
+    state.health = 10;
+    state.correctCount = 0;
+    state.usedKeys.clear();
+    beginRound();
+  }
+
+  // ---------------- ROUND ----------------
+  function buildRound(){
+    const available = state.pool.filter(a => !state.usedKeys.has(a.key));
+    const source = available.length ? available : state.pool;
+    const art = pickRandom(source);
+    state.usedKeys.add(art.key);
+    topUpIfLow();
+
+    const others = state.pool.filter(a => a.key !== art.key);
+    const artistCandidates = Array.from(new Set(others.map(a => a.artist))).filter(a => a !== art.artist);
+    const eraCandidates = Array.from(new Set(others.map(a => a.era))).filter(e => e !== art.era);
+    const wrongArtist = artistCandidates.length ? pickRandom(artistCandidates) : 'Unrecorded Artist';
+    const wrongEra = eraCandidates.length ? pickRandom(eraCandidates) : 'Unclassified Period';
+
+    const options = shuffle([
+      { artist: art.artist, era: art.era, artistRight: true, eraRight: true },
+      { artist: art.artist, era: wrongEra, artistRight: true, eraRight: false },
+      { artist: wrongArtist, era: art.era, artistRight: false, eraRight: true },
+      { artist: wrongArtist, era: wrongEra, artistRight: false, eraRight: false }
+    ]);
+
+    return { art, options };
+  }
+
+  function beginRound(){
+    state.screen = 'round';
+    state.current = buildRound();
+    state.answered = false;
+    updateHeader();
+    renderRound();
+  }
+
+  function renderRound(){
+    const { art, options } = state.current;
+    screenEl.innerHTML = `
+      <div class="easel">
+        <div class="frame">
+          <img id="artImg" src="${art.img}" alt="Artwork to identify" referrerpolicy="no-referrer">
+          <div class="badge" id="badge"></div>
+        </div>
+      </div>
+      <div class="panel">
+        <p class="question">Who made this — and which movement is it?</p>
+        <div class="choices" id="choices"></div>
+        <div class="placard" id="placard"></div>
+        <div class="next-row" id="nextRow"></div>
+      </div>`;
+
+    const img = document.getElementById('artImg');
+    img.addEventListener('load', () => img.classList.add('thrown'));
+    if(img.complete) img.classList.add('thrown');
+
+    const choicesEl = document.getElementById('choices');
+    options.forEach(opt => {
+      const b = document.createElement('button');
+      b.className = 'choice';
+      b.innerHTML = `<span class="choice-artist">${opt.artist}</span><span class="choice-era">${opt.era}</span>`;
+      b.addEventListener('click', () => handleAnswer(b, opt));
+      choicesEl.appendChild(b);
+    });
+  }
+
+  function handleAnswer(btn, chosen){
+    if(state.answered) return;
+    state.answered = true;
+
+    let heartsLost, verdictClass, verdictLabel, badgeText;
+    if(chosen.artistRight && chosen.eraRight){
+      heartsLost = 0; verdictClass = 'full'; verdictLabel = 'Dead on'; badgeText = 'Full marks';
+      state.correctCount++;
+    } else if(chosen.artistRight || chosen.eraRight){
+      heartsLost = 0.5; verdictClass = 'partial'; verdictLabel = 'Half right';
+      badgeText = chosen.artistRight ? 'Artist right, movement wrong' : 'Movement right, artist wrong';
+    } else {
+      heartsLost = 1; verdictClass = 'miss'; verdictLabel = 'Missed it';
+      badgeText = 'Both wrong';
+    }
+    state.health = Math.max(0, state.health - heartsLost);
+
+    document.querySelectorAll('.choice').forEach(c => {
+      c.disabled = true;
+      const label = c.querySelector('.choice-artist').textContent;
+      const eraLabel = c.querySelector('.choice-era').textContent;
+      const opt = state.current.options.find(o => o.artist === label && o.era === eraLabel);
+      if(opt){
+        if(opt.artistRight && opt.eraRight) c.classList.add('opt-full');
+        else if(opt.artistRight || opt.eraRight) c.classList.add('opt-partial');
+        else c.classList.add('opt-miss');
+      }
+    });
+    btn.classList.add('selected');
+
+    const badge = document.getElementById('badge');
+    badge.className = `badge show ${verdictClass}`;
+    badge.textContent = badgeText;
+
+    updateHeader();
+    showPlacard(verdictClass, verdictLabel);
+
+    const nextRow = document.getElementById('nextRow');
+    const btnNext = document.createElement('button');
+    btnNext.className = 'btn btn-primary';
+    btnNext.textContent = state.health <= 0 ? 'See your result →' : 'Throw next →';
+    btnNext.addEventListener('click', () => {
+      if(state.health <= 0) renderGameOver();
+      else beginRound();
+    });
+    nextRow.appendChild(btnNext);
+  }
+
+  function wikiUrl(term){ return `https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(term)}`; }
+
+  function showPlacard(verdictClass, verdictLabel){
+    const art = state.current.art;
+    const options = state.current.options;
+    const p = document.getElementById('placard');
+    p.classList.add('show');
+
+    const uniqueArtists = Array.from(new Set(options.map(o => o.artist)));
+    const uniqueEras = Array.from(new Set(options.map(o => o.era)));
+    const chips = [
+      ...uniqueArtists.map(name => ({ label: name, url: wikiUrl(name) })),
+      ...uniqueEras.map(name => ({ label: name, url: wikiUrl(name) })),
+      { label: `More by ${art.artist} at ${art.source}`, url: art.sourceSearchUrl },
+      { label: `View this piece at ${art.source}`, url: art.sourceUrl }
+    ];
+
+    p.innerHTML = `
+      <div class="placard-verdict ${verdictClass}">${verdictLabel}</div>
+      <p class="placard-title">${art.title}</p>
+      <p class="placard-meta">${art.artist} — ${art.era}${art.date ? ', ' + art.date : ''}${art.origin ? ' · ' + art.origin : ''} · ${art.source}</p>
+      <div class="learn-label">Look it up</div>
+      <div class="learn-chips">
+        ${chips.map(c => `<a class="learn-chip" href="${c.url}" target="_blank" rel="noopener noreferrer">${c.label} ↗</a>`).join('')}
+      </div>`;
+  }
+
+  // ---------------- GAME OVER ----------------
+  async function renderGameOver(){
+    state.screen = 'gameover';
+    const isRecord = state.correctCount > state.best;
+    if(isRecord){ state.best = state.correctCount; await ScoreStore.setBest(state.best); }
+    updateHeader();
+
+    screenEl.innerHTML = `
+      <div class="panel" style="text-align:center;">
+        <div class="end-label">Out of hearts</div>
+        <p class="end-score">${state.correctCount}</p>
+        <p class="end-sub">${isRecord ? 'New best' : `Best ${state.best}`}</p>
+        <div class="end-actions">
+          <button class="btn btn-primary" id="againBtn">Throw again →</button>
+          <button class="btn btn-ghost" id="backBtn">← Back</button>
+        </div>
+      </div>`;
+    document.getElementById('againBtn').addEventListener('click', startGame);
+    document.getElementById('backBtn').addEventListener('click', renderModes);
+  }
+
+  // ---------------- BOOT ----------------
+  async function boot(){
+    await Theme.init();
+    document.getElementById('themeBtn').addEventListener('click', () => Theme.toggle());
+    document.getElementById('wordmark').addEventListener('click', () => {
+      if(state.screen !== 'loading') renderLanding();
+    });
+    Auth.renderAccountChip();
+    renderLanding();
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>
