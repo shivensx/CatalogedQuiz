@@ -256,3 +256,57 @@
     } catch(e){ return []; }
   }
 
+  // ---------------- LEARN TAB: SPECIFIC ARTWORK LOOKUPS ----------------
+  // The Learn tab references particular, hand-picked pieces rather than
+  // pulling a random pool pick, so it needs to fetch by exact ID or by
+  // artist + title keyword instead of by movement search. AIC-only for
+  // now, matching where the current Learn content set was verified.
+  const AIC_FIELDS = 'id,title,artist_title,style_title,date_display,image_id,place_of_origin,medium_display';
+
+  function mapAICRecord(a){
+    if(!a || !a.image_id) return null;
+    return {
+      key: `aic-${a.id}`,
+      title: a.title || '',
+      artist: a.artist_title || '',
+      era: a.style_title || '',
+      date: a.date_display || '',
+      medium: a.medium_display || '',
+      img: `https://www.artic.edu/iiif/2/${a.image_id}/full/700,/0/default.jpg`,
+      source: 'Art Institute of Chicago',
+      sourceUrl: `https://www.artic.edu/artworks/${a.id}`,
+      sourceSearchUrl: `https://www.artic.edu/collection?q=${encodeURIComponent(a.artist_title || '')}`
+    };
+  }
+
+  async function fetchAICById(id){
+    try{
+      const url = `https://api.artic.edu/api/v1/artworks/${id}?fields=${AIC_FIELDS}`;
+      const res = await fetch(url);
+      if(!res.ok) return null;
+      const data = await res.json();
+      return mapAICRecord(data.data);
+    } catch(e){ return null; }
+  }
+
+  async function fetchAICByTitle(artist, titleKeyword){
+    try{
+      const q = `${artist} ${titleKeyword}`;
+      const url = `https://api.artic.edu/api/v1/artworks/search?q=${encodeURIComponent(q)}&fields=${AIC_FIELDS}&limit=5`;
+      const res = await fetch(url);
+      if(!res.ok) return null;
+      const data = await res.json();
+      const needle = titleKeyword.toLowerCase();
+      const match = (data.data || []).find(a => a.image_id && a.title && a.title.toLowerCase().includes(needle));
+      return match ? mapAICRecord(match) : null;
+    } catch(e){ return null; }
+  }
+
+  // Resolves one LEARN_CONTENT `lookup` object into a normalized artwork,
+  // regardless of which lookup shape it uses. Only AIC is wired up right
+  // now; other sources would just need a case added here.
+  async function resolveLearnExample(lookup){
+    if(lookup.source === 'aic' && lookup.type === 'id') return fetchAICById(lookup.id);
+    if(lookup.source === 'aic' && lookup.type === 'title') return fetchAICByTitle(lookup.artist, lookup.titleKeyword);
+    return null;
+  }

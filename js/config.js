@@ -14,8 +14,6 @@
     { id:'captcha', name:'CAPTCHA', desc:'prove you are human', available:true }
   ];
 
-  const LEARN_MOVEMENTS = ['Impressionism', 'Baroque', 'Expressionism', 'Renaissance'];
-
   const RULES = {
     classic: {
       title: 'Classic Quiz',
