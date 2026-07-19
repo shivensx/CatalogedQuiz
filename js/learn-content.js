@@ -1,18 +1,34 @@
   /* ============================================================
-     LEARN CONTENT — the actual write-ups, artwork references, and
-     quizzes for the Learning tab. Kept as pure data, separate from
-     js/learn.js (which renders it) and js/api-sources.js (which adds
-     the fetch helpers used to resolve `lookup` into a real artwork).
+     LEARN CONTENT — the write-ups, artwork references, and (unused
+     for now) quiz data for the Learning tab. Kept as pure data,
+     separate from js/learn.js (which renders it) and
+     js/api-sources.js (which resolves lookups/portraits into real
+     fetched data).
 
-     Every entry can be reached two ways: browsed directly from its
-     own tab (Movements / Artists / Subjects / Mediums), or walked in
-     sequence via a movement's `path` — the guided order of artists
-     and subjects that movement leads into.
+     ref() / refArt() mark up an inline mention of another entry or a
+     referenced artwork. js/learn.js turns these into clickable
+     elements after the write-up is inserted into the page: clicking
+     an artist's name jumps straight to their page, clicking an
+     artwork's title scrolls to and highlights that example on the
+     right. This replaced an earlier "continue to X" button design —
+     following a reference now happens inline, wherever it comes up,
+     rather than only at the bottom of a fixed path.
 
-     `lookup` shapes:
+     Quiz arrays are still here but currently unused — js/learn.js
+     doesn't render them right now. Left in place for a possible
+     later per-topic quiz feature.
+
+     `lookup` shapes (used to fetch the real artwork for an example):
        { type:'id', source:'aic', id:87088 }
        { type:'title', source:'aic', artist:'Claude Monet', titleKeyword:'Bennecourt' }
      ============================================================ */
+
+  function ref(kind, id, label){
+    return `<button type="button" class="learn-ref" data-ref-kind="${kind}" data-ref-id="${id}">${label}</button>`;
+  }
+  function refArt(exampleIndex, label){
+    return `<button type="button" class="learn-ref learn-ref-art" data-ref-example="${exampleIndex}">${label}</button>`;
+  }
 
   const LEARN_CONTENT = {
 
@@ -21,12 +37,13 @@
         id: 'impressionism',
         kind: 'movement',
         title: 'Impressionism',
-        years: '1870s–1890s',
-        teaser: 'Loose brushwork, everyday scenes, and a fixation on how light actually looks in a fleeting moment.',
+        years: '1870s\u20131890s',
+        teaser: 'Loose brushwork, everyday scenes, and a group of painters who got tired of doing things properly.',
         writeupHtml: `
-          <p>Impressionism began in Paris in the 1870s as a rebellion against the polished, studio-bound painting the French art establishment demanded. A group of painters — Monet, Renoir, Degas, Pissarro, Morisot among them — started working outdoors, painting quickly, and caring more about how light and color hit the eye in a fleeting moment than about smooth, "finished" detail. Critics meant it as an insult when they borrowed the title of Monet's <em>Impression, Sunrise</em> to mock the group as sketchy and unfinished — the name stuck, and the painters kept it.</p>
-          <p>A few things define the look: visible, broken brushstrokes instead of smoothed-out surfaces; color built up from small dabs placed next to each other rather than pre-mixed on the palette; everyday, unposed subject matter — train stations, riverbanks, dance halls, laundry — instead of history and mythology; and an obsession with capturing a <em>specific</em> moment of light, rather than an idealized, timeless one.</p>
-          <p>You can see all of this directly in Monet's <strong>Water Lily Pond</strong> (1900) — the water isn't rendered as a smooth reflective surface the way an academic painter would have done it; it's built from loose, overlapping strokes of green, violet, and white that only resolve into "water" from a few feet back. Compare that to Renoir's <strong>Two Sisters (On the Terrace)</strong> (1881): same era, same loose brushwork, but Renoir points the technique at people rather than landscape — warm, soft-edged figures against a hazy, dissolving background, prioritizing atmosphere over sharp detail even in a portrait setting.</p>
+          <p>Paris, the 1870s. A cluster of painters had grown tired of painting things the approved way. The official Salon wanted polish: smooth surfaces, historical drama, heroes standing around in togas. A handful of younger painters wanted none of it. Among them were ${ref('artist', 'monet', 'Claude Monet')} and ${ref('artist', 'renoir', 'Pierre-Auguste Renoir')}, who packed up their paints and went outside to chase light before it changed its mind.</p>
+          <p>A critic looking at one of Monet's harbor scenes called the whole thing sketchy and unfinished, and used the word "impression" as an insult. The name stuck anyway. Painters have survived worse reviews.</p>
+          <p>What actually separates this from what came before? Visible brushwork instead of smoothed-out surfaces. Color built from small dabs sitting next to each other rather than pre-mixed on a palette. Ordinary subjects like train stations and riverbanks instead of gods and generals. And a genuine obsession with one specific moment of light rather than some tidy, idealized version of it.</p>
+          <p>You can watch that idea play out quietly in Monet's ${refArt(0, 'Water Lily Pond')} (1900). Stand close and the water never resolves into a clean reflective surface. It stays a scatter of green, violet and white that only agrees to become "water" once you step back. ${ref('artist', 'renoir', 'Renoir')} was working with the same loose technique around the same time, just pointed at people instead of ponds. His ${refArt(1, 'Two Sisters (On the Terrace)')} (1881) shares that same hazy, dissolving background, though the figures themselves stay soft-edged and warm rather than disappearing into it.</p>
         `,
         examples: [
           { lookup: { type:'id', source:'aic', id: 87088 }, refLabel: 'Water Lily Pond' },
@@ -34,7 +51,7 @@
         ],
         quiz: [
           {
-            question: "What did critics originally mean by calling this group \u201cImpressionists\u201d?",
+            question: 'What did critics originally mean by calling this group "Impressionists"?',
             options: [
               'It was a mocking reference to how sketchy and unfinished the paintings looked',
               "It was a tribute to the artists' shared teacher",
@@ -53,11 +70,6 @@
             options: ['True', 'False'],
             correct: 1
           }
-        ],
-        path: [
-          { kind: 'artist', id: 'monet' },
-          { kind: 'artist', id: 'renoir' },
-          { kind: 'subject', id: 'light' }
         ]
       }
     },
@@ -67,13 +79,15 @@
         id: 'monet',
         kind: 'artist',
         title: 'Claude Monet',
-        years: '1840–1926',
+        years: '1840\u20131926',
         movementId: 'impressionism',
-        teaser: "Obsessed with how light changes — painted the same subject over and over to catch it.",
+        portraitQuery: 'Claude Monet',
+        teaser: 'Painted the same pond a hundred times because the light never sat still long enough to paint it once.',
         writeupHtml: `
-          <p>Claude Monet (1840–1926) is the artist most people picture when they hear "Impressionism," and for good reason — he didn't just work in the style, he spent his career pushing it further than almost anyone else. Monet was fixated on one specific problem: light doesn't hold still. The color of a haystack, a cathedral, a pond changes completely depending on the hour, the season, the weather — so instead of painting a single "true" version of a subject, Monet started painting the <em>same subject over and over</em>, at different times, to capture how light itself transformed it.</p>
-          <p>His painting <strong>On the Bank of the Seine, Bennecourt</strong> (1868) is early Monet, right at the edge of what would become Impressionism — the water and sky are already loosening up, already more about atmosphere than topographical accuracy, but the brushwork is still tighter than what came later. By the time you get to <strong>Water Lily Pond</strong> (1900), painted in his own garden at Giverny decades later, the dissolution is nearly complete — there's barely a hard edge anywhere in the canvas; water, sky reflection, and lily pads blur into each other, built entirely from color relationships rather than outlines.</p>
-          <p>What to look for if you're trying to spot a Monet specifically (versus another Impressionist): water and reflected light as a recurring subject, a tendency to work in series (haystacks, cathedral façades, water lilies, painted dozens of times each), and brushwork that gets progressively looser and more abstracted the later you go in his career — his late Giverny work borders on pure color-field painting.</p>
+          <p>Claude Monet lived from 1840 to 1926, long enough to watch the style he helped invent go from scandalous to beloved to slightly overexposed on tote bags. He is the artist most people picture when someone says "impressionism," and that reputation is earned. Monet didn't just work in the style. He spent decades pushing it further than almost anyone else was willing to go.</p>
+          <p>His obsession was simple to state and impossible to finish. Light does not hold still. A haystack looks different at eight in the morning than it does at noon, and different again by October. So instead of settling on one "true" version of a subject, Monet painted the same one repeatedly, at different hours and seasons, treating the changing light as the actual subject rather than the haystack itself.</p>
+          <p>You can watch this develop across his career. In an early piece like ${refArt(0, 'On the Bank of the Seine, Bennecourt')}, painted in 1868, the water and sky are already loosening up, though the brushwork still holds a fair amount of structure. By the time he painted ${refArt(1, 'Water Lily Pond')} in 1900, in his own garden at Giverny, that structure has mostly dissolved. Water, sky and lily pads blur into each other, held together by color rather than outline.</p>
+          <p>If you're trying to spot a Monet in a room full of other ${ref('movement', 'impressionism', 'Impressionists')}, look for water and reflected light as recurring obsessions, a habit of painting the same subject in long series, and brushwork that gets looser the later you go in his career. His final Giverny paintings sit right on the edge of pure abstraction, decades before that was supposed to be a thing.</p>
         `,
         examples: [
           { lookup: { type:'title', source:'aic', artist:'Claude Monet', titleKeyword:'Bennecourt' }, refLabel: 'On the Bank of the Seine, Bennecourt' },
@@ -91,7 +105,7 @@
             correct: 0
           },
           {
-            question: "Comparing Bennecourt (1868) to Water Lily Pond (1900) — did Monet's brushwork get tighter or looser over his career?",
+            question: "Comparing Bennecourt (1868) to Water Lily Pond (1900): did Monet's brushwork get tighter or looser over his career?",
             options: ['Tighter', 'Looser'],
             correct: 1
           },
@@ -106,13 +120,15 @@
         id: 'renoir',
         kind: 'artist',
         title: 'Pierre-Auguste Renoir',
-        years: '1841–1919',
+        years: '1841\u20131919',
         movementId: 'impressionism',
-        teaser: 'Pointed Impressionist technique at people instead of landscapes — warm, social, sun-lit scenes.',
+        portraitQuery: 'Pierre-Auguste Renoir',
+        teaser: 'Took the same loose technique as Monet and pointed it at people instead of ponds.',
         writeupHtml: `
-          <p>Renoir (1841–1919) trained alongside Monet — the two painted side by side early on and pushed each other toward the loose, light-focused style that became Impressionism. But where Monet gravitated toward landscape and water, Renoir's lasting obsession was people: warm, sociable scenes of Parisian leisure — dances, boating parties, portraits of friends and family, always rendered with a kind of glowing, sun-warmed softness.</p>
-          <p><strong>Two Sisters (On the Terrace)</strong> (1881) shows exactly this. It was painted at Chatou, a riverside town outside Paris that Renoir considered the most pleasant of all the Paris suburbs, and it captures two young women (not actually sisters — the models weren't related) on a terrace overlooking the Seine. Notice how the background landscape is almost entirely dissolved into soft color, while the figures themselves, though still loosely brushed, hold together with more solidity — Renoir is willing to let a landscape blur into abstraction in a way he rarely does with a human face. The palette leans warm throughout: pinks, warm blues, golden light, giving the whole scene a glow that feels distinct from Monet's cooler, more analytical relationship to color.</p>
-          <p>What to look for to distinguish a Renoir from a Monet: people as the central subject rather than incidental, a warmer and rosier palette overall, and figures that stay relatively more defined and solid even as the surrounding scene dissolves into loose Impressionist brushwork.</p>
+          <p>Renoir lived from 1841 to 1919 and trained alongside ${ref('artist', 'monet', 'Monet')} early in both their careers, the two of them painting side by side and pushing each other toward the loose, light-chasing style that became ${ref('movement', 'impressionism', 'Impressionism')}. But where Monet gravitated toward water and landscape, Renoir's lasting subject was people. Dances, boating parties, portraits of friends, all rendered with a warm, sun-soaked softness that's fairly easy to recognize once you've seen a few.</p>
+          <p>${refArt(0, 'Two Sisters (On the Terrace)')} (1881) is a good example of exactly this. It was painted at Chatou, a riverside town outside Paris that Renoir apparently considered the most pleasant of all the Paris suburbs, and shows two young women on a terrace overlooking the Seine. They were not actually sisters. The models were unrelated, which is the kind of detail that makes a title feel like a small act of branding.</p>
+          <p>Look at how the background dissolves into soft, unfocused color while the two figures stay comparatively solid. Renoir was happy to let a landscape blur into near abstraction, but rarely did the same to a human face. The palette leans warm throughout, pink skin, warm blues, golden light, giving the whole scene a glow that feels distinct from Monet's cooler and more analytical relationship with color.</p>
+          <p>To tell a Renoir from a Monet at a glance: people take center stage rather than sitting in as an afterthought, the palette runs warmer and rosier, and the figures hold their shape even as everything around them softens into brushwork.</p>
         `,
         examples: [
           { lookup: { type:'id', source:'aic', id: 14655 }, refLabel: 'Two Sisters (On the Terrace)' }
@@ -143,12 +159,12 @@
         kind: 'subject',
         title: 'Light',
         movementIds: ['impressionism'],
-        teaser: 'The same problem, answered almost opposite ways: light as drama vs. light as the whole subject.',
+        teaser: 'Two painters, three centuries apart, with almost opposite theories about what light is even for.',
         writeupHtml: `
-          <p>Every movement in painting has had to answer the same question: what do you do with light? The answer changes completely depending on the era, and comparing two extremes makes the differences obvious fast.</p>
-          <p>Take Rembrandt's <strong>Old Man with a Gold Chain</strong> (1631), a textbook example of Baroque light. Baroque painters — working roughly a century before Impressionism — used light as drama. A single strong source (often unseen, implied rather than shown) rakes across the subject, throwing everything else into deep, near-black shadow. It's theatrical and selective: light exists to sculpt form, create mood, and direct your eye to exactly one thing, usually a face. The background barely exists; it's swallowed in darkness on purpose.</p>
-          <p>Now put that next to Monet's <strong>Water Lily Pond</strong> (1900) or, even more directly, his haystack series. Impressionist light works almost opposite to Baroque light: instead of one dramatic beam carving darkness out of a scene, light is <em>everywhere</em>, diffuse, and constantly shifting — the whole point is that there's no single "correct" lighting moment, only an endless series of temporary ones. Shadows in Impressionist painting aren't black voids; they're colored (often blue or violet), because Monet and his peers had realized shadows pick up reflected color from their surroundings rather than being the simple absence of light. Where Baroque light isolates a subject from its environment, Impressionist light dissolves the subject <em>into</em> its environment.</p>
-          <p>The two paintings sit less than 300 years apart and represent almost opposite theories of what light is for in a painting: revelation-through-contrast versus light as the actual subject of the picture.</p>
+          <p>Every era of painting has had to answer the same basic question. What do you actually do with light? Compare two extremes and the differences become obvious fast.</p>
+          <p>Take Rembrandt's approach in ${refArt(0, 'Old Man with a Gold Chain')}, a textbook example of Baroque light from about a century before Impressionism existed. A single strong source, often unseen and only implied, rakes across the subject and throws everything else into near total darkness. It's theatrical and deliberately selective. Light exists to sculpt form, build mood and drag your eye toward exactly one thing, usually a face. The background barely gets to exist. It's swallowed in shadow on purpose.</p>
+          <p>Now put that next to Monet's ${refArt(1, 'Water Lily Pond')}, or better yet his haystack series. Impressionist light works almost in reverse. Instead of one dramatic beam carving darkness out of a scene, light is everywhere at once, diffuse and constantly shifting, and the whole point is that there's no single correct lighting moment, only an endless series of temporary ones. Shadows in an Impressionist painting aren't flat black voids. They're colored, often blue or violet, because ${ref('artist', 'monet', 'Monet')} and his peers had noticed that shadows pick up reflected color from whatever surrounds them rather than being a simple absence of light. Where Baroque light isolates a subject from its environment, Impressionist light dissolves the subject into it.</p>
+          <p>The two approaches sit less than three centuries apart and represent almost opposite theories about what light is for in a painting. One reveals through contrast. The other treats light as the entire point.</p>
         `,
         examples: [
           { lookup: { type:'title', source:'aic', artist:'Rembrandt van Rijn', titleKeyword:'Gold Chain' }, refLabel: 'Old Man with a Gold Chain' },
@@ -171,7 +187,7 @@
             correct: 0
           },
           {
-            question: 'Which approach treats light itself as the main subject of the painting — Baroque or Impressionism?',
+            question: 'Which approach treats light itself as the main subject of the painting: Baroque or Impressionism?',
             options: ['Baroque', 'Impressionism'],
             correct: 1
           }

@@ -310,3 +310,17 @@
     if(lookup.source === 'aic' && lookup.type === 'title') return fetchAICByTitle(lookup.artist, lookup.titleKeyword);
     return null;
   }
+
+  // ---------------- LEARN TAB: ARTIST PORTRAITS ----------------
+  // Wikipedia's summary endpoint is free, needs no key, and returns a
+  // lead thumbnail image for most well-known people — a reasonable
+  // source for "put a picture of the artist next to their name."
+  async function fetchWikipediaPortrait(pageTitle){
+    try{
+      const url = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(pageTitle)}`;
+      const res = await fetch(url);
+      if(!res.ok) return null;
+      const data = await res.json();
+      return (data.thumbnail && data.thumbnail.source) || (data.originalimage && data.originalimage.source) || null;
+    } catch(e){ return null; }
+  }

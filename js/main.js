@@ -1,6 +1,7 @@
   // ---------------- BOOT ----------------
   async function boot(){
     warmPoolInBackground();
+    warmLearnContent();
     await Theme.init();
     document.getElementById('themeBtn').addEventListener('click', () => Theme.toggle());
     document.getElementById('profileBtn').addEventListener('click', renderLogin);
