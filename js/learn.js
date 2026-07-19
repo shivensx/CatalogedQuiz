@@ -122,7 +122,7 @@
   }
 
   // ---------------- SHARED: BROWSABLE LIST SCREEN ----------------
-  function renderLearnList(screenName, title, entries, onOpen, showPortraits){
+  function renderLearnList(screenName, title, entries, onOpen){
     state.screen = screenName;
     updateChrome();
     screenEl.innerHTML = `
@@ -141,37 +141,27 @@
       const b = document.createElement('button');
       b.className = 'mode-item';
       b.innerHTML = `
-        <span class="mode-main mode-main-portrait">
-          ${showPortraits ? `<span class="mode-portrait" id="portrait-${entry.id}"></span>` : ''}
-          <span class="mode-text">
-            <span class="mode-name">${entry.title}</span>
-            <span class="mode-desc">${entry.teaser}</span>
-          </span>
+        <span class="mode-main">
+          <span class="mode-name">${entry.title}</span>
+          <span class="mode-desc">${entry.teaser}</span>
         </span>`;
       b.addEventListener('click', () => onOpen(entry.id));
       list.appendChild(b);
-      if(showPortraits){
-        resolveArtistPortrait(entry).then(url => {
-          if(!url) return;
-          const slot = document.getElementById(`portrait-${entry.id}`);
-          if(slot) slot.innerHTML = `<img src="${url}" alt="" referrerpolicy="no-referrer">`;
-        });
-      }
     });
     document.getElementById('backBtn').addEventListener('click', renderLearn);
   }
 
   function renderLearnMovements(){
-    renderLearnList('learn-movements', 'movements', Object.values(LEARN_CONTENT.movements), renderLearnMovementDetail, false);
+    renderLearnList('learn-movements', 'movements', Object.values(LEARN_CONTENT.movements), renderLearnMovementDetail);
   }
   function renderLearnArtists(){
-    renderLearnList('learn-artists', 'artists', Object.values(LEARN_CONTENT.artists), renderLearnArtistDetail, true);
+    renderLearnList('learn-artists', 'artists', Object.values(LEARN_CONTENT.artists), renderLearnArtistDetail);
   }
   function renderLearnSubjects(){
-    renderLearnList('learn-subjects', 'subjects', Object.values(LEARN_CONTENT.subjects), renderLearnSubjectDetail, false);
+    renderLearnList('learn-subjects', 'subjects', Object.values(LEARN_CONTENT.subjects), renderLearnSubjectDetail);
   }
   function renderLearnMediums(){
-    renderLearnList('learn-mediums', 'mediums', Object.values(LEARN_CONTENT.mediums), () => {}, false);
+    renderLearnList('learn-mediums', 'mediums', Object.values(LEARN_CONTENT.mediums), () => {});
   }
 
   // ---------------- SHARED: DETAIL SCREEN ----------------
