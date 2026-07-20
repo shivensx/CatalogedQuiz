@@ -4,9 +4,6 @@
   /* ============================================================
      CONTENT CONFIG
      ============================================================ */
-  const LANDING = {
-    tagline: 'a fun way to learn art history'
-  };
 
   const MODES = [
     { id:'classic', name:'Classic Quiz', desc:'name the artist and the movement', available:true },
