@@ -19,11 +19,10 @@
   //
   // Picks are stratified by era first, then by artwork within that era.
   // A flat random pick across the whole pool would be dominated by
-  // whichever movements happen to have the most public-domain hits
-  // (Impressionism, Baroque, etc.), crowding out rarer ones like
-  // Ukiyo-e or Neoclassicism. Picking the era uniformly first keeps
-  // the mix of movements roughly even over time regardless of how
-  // lopsided the underlying pool is.
+  // whichever movements happen to have the most results (Impressionism,
+  // Baroque, etc.), crowding out narrower ones like Rococo or Fauvism.
+  // Picking the era uniformly first keeps the mix of movements roughly
+  // even over time regardless of how lopsided the underlying pool is.
   function pickForRound(candidates){
     const usable = candidates.filter(a => !state.brokenKeys.has(a.key));
     const pool = usable.length ? usable : candidates;

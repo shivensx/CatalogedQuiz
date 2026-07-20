@@ -45,7 +45,7 @@
   async function fetchAIC(term){
     const fields = 'id,title,artist_title,style_title,date_display,image_id,place_of_origin,medium_display,classification_title';
     const baseUrl = `https://api.artic.edu/api/v1/artworks/search?q=${encodeURIComponent(term)}`
-      + `&query[term][is_public_domain]=true&fields=${fields}&limit=25`;
+      + `&fields=${fields}&limit=25`;
     try{
       const res1 = await fetch(`${baseUrl}&page=1`);
       if(!res1.ok) return [];
@@ -161,7 +161,7 @@
       return details
         .filter(Boolean)
         .map(o => ({ o, img: o.primaryImageSmall || o.primaryImage || null }))
-        .filter(x => x.o.isPublicDomain && x.img && x.o.artistDisplayName)
+        .filter(x => x.img && x.o.artistDisplayName)
         .filter(x => x.o.classification && x.o.classification.toLowerCase().includes('paint'))
         .filter(x => plausibleForMovement(term, x.o.objectDate))
         .map(x => ({

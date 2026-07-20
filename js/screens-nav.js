@@ -101,7 +101,7 @@
     stopLoadingMessages();
     screenEl.innerHTML = `
       <div class="stage-wrap">
-        <p class="error-box">not enough public-domain artwork loaded</p>
+        <p class="error-box">not enough artwork loaded</p>
         <button class="btn btn-ghost" id="backToModesBtn" style="margin-top:16px;">back</button>
       </div>`;
     document.getElementById('backToModesBtn').addEventListener('click', renderModes);
