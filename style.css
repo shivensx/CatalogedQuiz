@@ -573,6 +573,24 @@
   }
   .learn-chip:hover{ box-shadow:var(--shadow-sm); }
 
+  /* ===== RELATED ENTRIES (experimental — see js/learn.js) =====
+     Self-contained: safe to delete this whole block if the feature
+     gets removed, along with its JS block and the `related` field on
+     entries in js/learn-content.js. */
+  .related-entries-section{ margin-top:36px; padding-top:24px; border-top:1px solid var(--text-dim); }
+  .related-entries-label{ font-family:var(--font-sans); font-weight:700; font-size:12px; letter-spacing:1px; text-transform:uppercase; color:var(--text-dim); margin-bottom:14px; }
+  .related-entries-chips{ display:flex; flex-wrap:wrap; gap:9px; }
+  .related-entry-chip{
+    display:inline-flex; align-items:baseline; gap:6px;
+    font-family:var(--font-sans); font-size:13px; font-weight:500;
+    padding:8px 14px; border-radius:100px;
+    background:var(--card); border:none; box-shadow:none; cursor:pointer;
+    color:var(--text); transition:box-shadow .15s ease, transform .15s ease;
+  }
+  .related-entry-chip:hover{ box-shadow:var(--shadow-sm); transform:translateY(-1px); }
+  .related-entry-type{ font-size:10.5px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-dim); }
+  /* ===== /RELATED ENTRIES ===== */
+
   /* ---------- review (post-game) ---------- */
   .review-list{ display:flex; flex-direction:column; gap:22px; margin-bottom:12px; }
   .review-item{ display:flex; gap:16px; align-items:flex-start; }
