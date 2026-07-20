@@ -108,7 +108,14 @@
     cursor:pointer;
     line-height:1;
   }
-  .logo-mark svg{ display:block; height:22px; width:auto; }
+  .logo-mark-img{
+    display:block; height:22px; aspect-ratio:3840/925;
+    background-color:currentColor;
+    -webkit-mask-image:url('images/textmark.svg'); mask-image:url('images/textmark.svg');
+    -webkit-mask-repeat:no-repeat; mask-repeat:no-repeat;
+    -webkit-mask-size:contain; mask-size:contain;
+    -webkit-mask-position:center; mask-position:center;
+  }
   [data-theme="dark"] .logo-mark{ color:var(--bg-light); }
 
   .icon-btn{
@@ -161,7 +168,14 @@
     display:flex; justify-content:center;
     margin:0 0 26px;
   }
-  .hero-title svg{ display:block; height:clamp(70px,20vw,190px); width:auto; }
+  .hero-title-img{
+    display:block; height:clamp(70px,20vw,190px); aspect-ratio:993/463;
+    background-color:currentColor;
+    -webkit-mask-image:url('images/text-logo.svg'); mask-image:url('images/text-logo.svg');
+    -webkit-mask-repeat:no-repeat; mask-repeat:no-repeat;
+    -webkit-mask-size:contain; mask-size:contain;
+    -webkit-mask-position:center; mask-position:center;
+  }
   .hero-lede{ font-size:clamp(20px,3.8vw,29px); color:var(--text); margin:0 0 50px; }
   .hero-actions{ display:flex; gap:64px; flex-wrap:wrap; justify-content:center; }
   .hero-actions .btn{ min-width:110px; text-align:center; }
