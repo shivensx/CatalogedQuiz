@@ -4,9 +4,9 @@
   /* ============================================================
      CONTENT CONFIG
      ============================================================ */
-const LANDING = {
+  const LANDING = {
     tagline: ''
-};
+  };
 
   const MODES = [
     { id:'classic', name:'Classic Quiz', desc:'name the artist and the movement', available:true },
