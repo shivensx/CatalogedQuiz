@@ -308,7 +308,99 @@
   async function resolveLearnExample(lookup){
     if(lookup.source === 'aic' && lookup.type === 'id') return fetchAICById(lookup.id);
     if(lookup.source === 'aic' && lookup.type === 'title') return fetchAICByTitle(lookup.artist, lookup.titleKeyword);
+    if(lookup.source === 'met' && lookup.type === 'id') return fetchMetById(lookup.id);
+    if(lookup.source === 'cleveland' && lookup.type === 'accession') return fetchClevelandByAccession(lookup.accession);
+    if(lookup.source === 'smk' && lookup.type === 'inventory') return fetchSMKByInventory(lookup.inventory);
     return null;
+  }
+
+  // Reuses the same per-object endpoint fetchMet() already uses for pool
+  // items — this one is a known-good, verified shape.
+  async function fetchMetById(id){
+    try{
+      const res = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${id}`);
+      if(!res.ok) return null;
+      const o = await res.json();
+      const img = o.primaryImageSmall || o.primaryImage || null;
+      if(!img || !o.artistDisplayName) return null;
+      return {
+        key: `met-${o.objectID}`,
+        title: o.title || '',
+        artist: o.artistDisplayName,
+        era: o.period || o.culture || o.classification || '',
+        date: o.objectDate || '',
+        medium: o.medium || '',
+        img,
+        source: 'The Metropolitan Museum of Art',
+        sourceUrl: o.objectURL || `https://www.metmuseum.org/art/collection/search/${o.objectID}`,
+        sourceSearchUrl: `https://www.metmuseum.org/art/collection/search?q=${encodeURIComponent(o.artistDisplayName)}`
+      };
+    } catch(e){ return null; }
+  }
+
+  // Cleveland's API doesn't have a confirmed direct lookup-by-accession
+  // endpoint, so this searches on the accession number as text and
+  // matches the result whose own accession_number field agrees exactly.
+  // Best-effort: fails gracefully (returns null) rather than guessing.
+  async function fetchClevelandByAccession(accession){
+    try{
+      const url = `https://openaccess-api.clevelandart.org/api/artworks/?q=${encodeURIComponent(accession)}&has_image=1&limit=10`;
+      const res = await fetch(url);
+      if(!res.ok) return null;
+      const data = await res.json();
+      const match = (data.data || []).find(a => a.accession_number === accession);
+      if(!match) return null;
+      const img = (match.images && (match.images.web || match.images.print)) ? (match.images.web ? match.images.web.url : match.images.print.url) : null;
+      const creator = match.creators && match.creators[0] ? match.creators[0].description : null;
+      const artist = creator ? creator.split(' (')[0].trim() : null;
+      if(!img || !artist) return null;
+      return {
+        key: `cma-${match.id}`,
+        title: match.title || '',
+        artist,
+        era: '',
+        date: match.creation_date || '',
+        medium: match.technique || '',
+        img,
+        source: 'Cleveland Museum of Art',
+        sourceUrl: `https://www.clevelandart.org/art/${match.id}`,
+        sourceSearchUrl: `https://www.clevelandart.org/art/collection/search?search_api_fulltext=${encodeURIComponent(artist)}`
+      };
+    } catch(e){ return null; }
+  }
+
+  // Same best-effort approach for SMK: search on the inventory number,
+  // match the item whose own object_number agrees exactly.
+  async function fetchSMKByInventory(inventory){
+    try{
+      const url = `https://api.smk.dk/api/v1/art/search/?keys=${encodeURIComponent(inventory)}&rows=10`;
+      const res = await fetch(url);
+      if(!res.ok) return null;
+      const data = await res.json();
+      const match = (data.items || []).find(o => o.object_number === inventory);
+      if(!match) return null;
+      const titles = match.titles || [];
+      const titleEn = titles.find(t => t.language === 'en');
+      const title = (titleEn && titleEn.title) || (titles[0] && titles[0].title) || '';
+      const prod = match.production && match.production[0];
+      const artist = (Array.isArray(match.artist) && match.artist[0]) || (prod && prod.creator) || null;
+      const img = match.image_native || match.image_thumbnail
+        || (match.image_iiif_id ? `${match.image_iiif_id}/full/400,/0/default.jpg` : null);
+      if(!img || !artist) return null;
+      const dateRaw = (match.production_date && match.production_date[0] && (match.production_date[0].period || match.production_date[0].start)) || '';
+      return {
+        key: `smk-${match.id}`,
+        title,
+        artist,
+        era: '',
+        date: typeof dateRaw === 'string' ? dateRaw.slice(0, 4) : '',
+        medium: (Array.isArray(match.techniques) && match.techniques.join(', ')) || '',
+        img,
+        source: 'SMK — National Gallery of Denmark',
+        sourceUrl: match.object_url || `https://open.smk.dk/en/artwork/image/${match.id}`,
+        sourceSearchUrl: `https://open.smk.dk/en/search?q=${encodeURIComponent(artist)}`
+      };
+    } catch(e){ return null; }
   }
 
   // ---------------- LEARN TAB: ARTIST PORTRAITS ----------------

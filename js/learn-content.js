@@ -49,6 +49,13 @@
           { lookup: { type:'id', source:'aic', id: 87088 }, refLabel: 'Water Lily Pond' },
           { lookup: { type:'id', source:'aic', id: 14655 }, refLabel: 'Two Sisters (On the Terrace)' }
         ],
+        /* ===== RELATED ENTRIES (experimental — see js/learn.js) ===== */
+        related: [
+          { kind: 'artist', id: 'monet' },
+          { kind: 'artist', id: 'renoir' },
+          { kind: 'subject', id: 'light' }
+        ],
+        /* ===== /RELATED ENTRIES ===== */
         quiz: [
           {
             question: 'What did critics originally mean by calling this group "Impressionists"?',
@@ -71,6 +78,30 @@
             correct: 1
           }
         ]
+      },
+      romanticism: {
+        id: 'romanticism',
+        kind: 'movement',
+        title: 'Romanticism',
+        years: 'early 1800s',
+        teaser: 'Storms, wild animals, history\u2019s worst days. Basically one long eye-roll at the Enlightenment.',
+        writeupHtml: `
+          <p>Romanticism showed up in the early 1800s as basically one long eye-roll at the Enlightenment's obsession with cool logic and orderly composition. The Neoclassical painters right before them wanted everything balanced, restrained, dignified, like a marble statue that never sweats. The Romantics said no thanks, we'd rather feel something, and went looking for subjects that could genuinely rattle a viewer. Storms. Wild animals. History's worst days. Anything that reminded you that nature and fate don't really care about your composure.</p>
+          <p>It wasn't one tidy art movement with a manifesto and a group chat. Painters in Paris, London, Madrid and Dresden were all circling the same idea more or less on their own, which is kind of funny when you think about it, like several people independently deciding the same restaurant was overrated. What they landed on was pretty consistent though. Loose, energetic brushwork. Dramatic lighting. A soft spot for chaos over order. And a genuine interest in raw personal emotion as something worth putting front and center on a canvas, not something to be smoothed over with technique.</p>
+          <p>${ref('artist', 'delacroix', "Delacroix's")} ${refArt(0, 'Lion Hunt')} (1860) is a good gateway drug into all this. Men, horses and lions are all tangled together in one big violent knot, and the paint itself looks like it's still moving. ${ref('artist', 'turner', 'Turner')} goes at it from a totally different angle in ${refArt(1, 'The Burning of the Houses of Lords and Commons')} (1834), where London's Parliament is on fire and the whole sky has basically dissolved into orange chaos. Different subjects, same instinct. Both painters wanted you to feel a little unsteady looking at it, not admire how tidy everything was.</p>
+        `,
+        examples: [
+          { lookup: { type:'id', source:'aic', id: 81505 }, refLabel: 'Lion Hunt' },
+          { lookup: { type:'accession', source:'cleveland', accession: '1942.647' }, refLabel: 'The Burning of the Houses of Lords and Commons' }
+        ],
+        /* ===== RELATED ENTRIES (experimental — see js/learn.js) ===== */
+        related: [
+          { kind: 'artist', id: 'delacroix' },
+          { kind: 'artist', id: 'turner' },
+          { kind: 'subject', id: 'nature-sublime' }
+        ],
+        /* ===== /RELATED ENTRIES ===== */
+        quiz: []
       }
     },
 
@@ -93,6 +124,12 @@
           { lookup: { type:'title', source:'aic', artist:'Claude Monet', titleKeyword:'Bennecourt' }, refLabel: 'On the Bank of the Seine, Bennecourt' },
           { lookup: { type:'id', source:'aic', id: 87088 }, refLabel: 'Water Lily Pond' }
         ],
+        /* ===== RELATED ENTRIES (experimental — see js/learn.js) ===== */
+        related: [
+          { kind: 'movement', id: 'impressionism' },
+          { kind: 'subject', id: 'light' }
+        ],
+        /* ===== /RELATED ENTRIES ===== */
         quiz: [
           {
             question: 'What real-world problem was Monet obsessively trying to capture across his career?',
@@ -133,6 +170,11 @@
         examples: [
           { lookup: { type:'id', source:'aic', id: 14655 }, refLabel: 'Two Sisters (On the Terrace)' }
         ],
+        /* ===== RELATED ENTRIES (experimental — see js/learn.js) ===== */
+        related: [
+          { kind: 'movement', id: 'impressionism' }
+        ],
+        /* ===== /RELATED ENTRIES ===== */
         quiz: [
           {
             question: "What was Renoir's more consistent subject matter compared to Monet's?",
@@ -150,6 +192,56 @@
             correct: 1
           }
         ]
+      },
+      delacroix: {
+        id: 'delacroix',
+        kind: 'artist',
+        title: 'Eug\u00e8ne Delacroix',
+        years: '1798\u20131863',
+        movementId: 'romanticism',
+        portraitQuery: 'Eug\u00e8ne Delacroix',
+        teaser: 'The mascot of French Romanticism. Built figures out of color pushing against color instead of outline.',
+        writeupHtml: `
+          <p>Delacroix (1798\u20131863) is basically the mascot of French ${ref('movement', 'romanticism', 'Romanticism')}. Renoir, Van Gogh and even Picasso all name-checked him later as someone who cracked something open. His whole deal was color and motion doing the work that outline and stillness used to do. An academic painter builds a figure like they're coloring inside careful lines. Delacroix just about ignores the lines and builds the figure out of color pushing against color, so the paint itself feels like it's got a pulse.</p>
+          <p>He also had a taste for subjects with built-in drama. Combat, animals mid-fight, anything exotic or unfamiliar (a trip to North Africa in 1832 gave him a lifetime supply of imagery he kept returning to). ${refArt(0, 'The Natchez')} (1834\u201335) shows this pull toward heightened, emotionally loaded scenes even when there's no actual battle happening. ${refArt(1, 'Lion Hunt')} is the louder version, all motion and teeth and nobody in the frame having a calm day.</p>
+          <p>Here's the cheat sheet, the stuff that basically screams "this is a Delacroix" the second you see it: more than one figure, and they're all doing something to each other, not just standing there. Color that looks hot and turned up, not realistic, almost like the painting has a temperature. Brushwork you can actually see moving, like the paint hasn't quite settled yet. And a general vibe of conflict, tension, or somewhere far from home. If the painting looks calm and orderly, it's probably not him.</p>
+        `,
+        examples: [
+          { lookup: { type:'id', source:'met', id: 436180 }, refLabel: 'The Natchez' },
+          { lookup: { type:'id', source:'aic', id: 81505 }, refLabel: 'Lion Hunt' }
+        ],
+        /* ===== RELATED ENTRIES (experimental — see js/learn.js) ===== */
+        related: [
+          { kind: 'movement', id: 'romanticism' },
+          { kind: 'subject', id: 'nature-sublime' }
+        ],
+        /* ===== /RELATED ENTRIES ===== */
+        quiz: []
+      },
+      turner: {
+        id: 'turner',
+        kind: 'artist',
+        title: 'J.M.W. Turner',
+        years: '1775\u20131851',
+        movementId: 'romanticism',
+        portraitQuery: 'J. M. W. Turner',
+        teaser: 'Built drama out of weather instead of people. Let the sky and sea eat the rest of the painting alive.',
+        writeupHtml: `
+          <p>Turner (1775\u20131851) took ${ref('movement', 'romanticism', 'Romanticism')} somewhere ${ref('artist', 'delacroix', 'Delacroix')} never really went. Instead of building drama out of people or animals doing violent things to each other, Turner built it out of weather. Sky, water, smoke, fire, whatever the atmosphere was doing that day, and he'd push it until it basically ate the rest of the painting alive.</p>
+          <p>${refArt(0, 'The Burning of the Houses of Lords and Commons')} is a great example because it's technically a real historical event, London's Parliament actually burned down in 1834, but Turner cranks the flames up so high and blurs the smoke so thoroughly that the people watching from the riverbank end up looking like an afterthought. Same thing happens in ${refArt(1, 'Whalers')} (c. 1845), where a wounded whale thrashing in a sea of foam and blood practically dissolves the whole composition into churn. Turner kept pushing this direction his whole career, to the point where his late paintings barely have a subject left, just color and light doing something turbulent, which later painters, including eventually the Impressionists, took real notice of.</p>
+          <p>The Turner tell, if you're trying to clock one fast: the sky and water are basically fighting for who gets to be the main character. Everything solid, boats, buildings, people, looks like it's about thirty seconds from dissolving into fog or fire. It's hazy in a way that feels deliberate, not like bad restoration. And if you squint and can't quite tell where the sea ends and the sky begins, that's not your eyesight, that's just Turner.</p>
+        `,
+        examples: [
+          { lookup: { type:'accession', source:'cleveland', accession: '1942.647' }, refLabel: 'The Burning of the Houses of Lords and Commons' },
+          { lookup: { type:'id', source:'met', id: 437854 }, refLabel: 'Whalers' }
+        ],
+        /* ===== RELATED ENTRIES (experimental — see js/learn.js) ===== */
+        related: [
+          { kind: 'movement', id: 'romanticism' },
+          { kind: 'subject', id: 'nature-sublime' }
+        ],
+        /* ===== /RELATED ENTRIES ===== */
+        quiz: []
       }
     },
 
@@ -170,6 +262,13 @@
           { lookup: { type:'title', source:'aic', artist:'Rembrandt van Rijn', titleKeyword:'Gold Chain' }, refLabel: 'Old Man with a Gold Chain' },
           { lookup: { type:'id', source:'aic', id: 87088 }, refLabel: 'Water Lily Pond' }
         ],
+        /* ===== RELATED ENTRIES (experimental — see js/learn.js) ===== */
+        related: [
+          { kind: 'movement', id: 'impressionism' },
+          { kind: 'artist', id: 'monet' },
+          { kind: 'subject', id: 'nature-sublime' }
+        ],
+        /* ===== /RELATED ENTRIES ===== */
         quiz: [
           {
             question: 'In Baroque painting, is light typically diffuse across the whole scene or concentrated on one subject?',
@@ -192,6 +291,33 @@
             correct: 1
           }
         ]
+      },
+      'nature-sublime': {
+        id: 'nature-sublime',
+        kind: 'subject',
+        title: 'Nature & the Sublime',
+        movementIds: ['romanticism'],
+        teaser: 'Not pretty nature. The kind that could kill you, watched from just far enough away to be safe.',
+        writeupHtml: `
+          <p>${ref('movement', 'romanticism', 'Romantic')} painters loved nature, but not the pretty postcard version. They were after something a little more specific, that feeling of standing in front of something enormous and powerful that genuinely does not care whether you live or die. There's actually a real word for that exact feeling, the sublime, and it's worth knowing because it's more precise than just saying "nature." A calm meadow is beautiful. A storm that could kill you, watched from just far enough away to be safe, is sublime. Same general subject, very different feeling in your chest.</p>
+          <p>${ref('artist', 'turner', "Turner's")} ${refArt(0, 'The Burning of the Houses of Lords and Commons')} goes for the sublime through sheer scale and disaster. ${ref('artist', 'delacroix', "Delacroix's")} ${refArt(1, 'Lion Hunt')} goes for it through raw physical violence, nature as predator rather than weather. And then there's a quieter version of the same idea in Caspar David Friedrich's ${refArt(2, 'After the Storm')} (1817), which shows a ship that's just survived rough seas, with dramatic clouds still breaking apart overhead. No fire, no fangs, just a small boat and a massive, indifferent sky, which honestly might be the most sublime option of the three since nothing's even actively trying to kill anyone anymore. The danger already happened. You're just sitting with how small that made everyone feel.</p>
+          <p>Worth comparing this to ${ref('subject', 'light', 'Impressionist light')} too, since on the surface both are about nature. ${ref('artist', 'monet', "Monet's")} ${refArt(3, 'Water Lily Pond')} wants you to lean in close and admire how color behaves up close, a quiet, intimate kind of looking. The sublime wants the opposite. It wants distance. It wants you to feel how little control you actually have. Same general territory, nature and light, aimed at two pretty different feelings.</p>
+        `,
+        examples: [
+          { lookup: { type:'accession', source:'cleveland', accession: '1942.647' }, refLabel: 'The Burning of the Houses of Lords and Commons' },
+          { lookup: { type:'id', source:'aic', id: 81505 }, refLabel: 'Lion Hunt' },
+          { lookup: { type:'inventory', source:'smk', inventory: 'KMS8817' }, refLabel: 'After the Storm' },
+          { lookup: { type:'id', source:'aic', id: 87088 }, refLabel: 'Water Lily Pond' }
+        ],
+        /* ===== RELATED ENTRIES (experimental — see js/learn.js) ===== */
+        related: [
+          { kind: 'movement', id: 'romanticism' },
+          { kind: 'artist', id: 'turner' },
+          { kind: 'artist', id: 'delacroix' },
+          { kind: 'subject', id: 'light' }
+        ],
+        /* ===== /RELATED ENTRIES ===== */
+        quiz: []
       }
     },
 

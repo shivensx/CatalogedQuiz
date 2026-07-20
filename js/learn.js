@@ -164,6 +164,59 @@
     renderLearnList('learn-mediums', 'mediums', Object.values(LEARN_CONTENT.mediums), () => {});
   }
 
+  /* ============================================================
+     RELATED ENTRIES — experimental cross-referencing feature.
+     Self-contained on purpose: to remove this entirely later, delete
+     this whole block, the one call to relatedEntriesSectionHTML() /
+     wireRelatedEntries() inside renderLearnDetail() below, and the
+     matching CSS block in style.css (also marked for easy removal).
+     Nothing else in the Learn tab depends on this.
+
+     Reads an entry's optional `related` array (added in
+     js/learn-content.js) — a flat list of { kind, id } pairs — and
+     renders them as clickable chips at the bottom of the page.
+     Relationships are manually authored on both sides in the content
+     data, not auto-inferred.
+     ============================================================ */
+  function relatedEntryCollection(kind){
+    if(kind === 'artist') return LEARN_CONTENT.artists;
+    if(kind === 'movement') return LEARN_CONTENT.movements;
+    if(kind === 'subject') return LEARN_CONTENT.subjects;
+    return LEARN_CONTENT.mediums;
+  }
+
+  function relatedEntryOpen(kind, id){
+    if(kind === 'artist') renderLearnArtistDetail(id);
+    else if(kind === 'movement') renderLearnMovementDetail(id);
+    else if(kind === 'subject') renderLearnSubjectDetail(id);
+  }
+
+  function relatedEntriesSectionHTML(entry){
+    const items = entry.related || [];
+    const chips = items
+      .map(r => ({ ref: r, target: relatedEntryCollection(r.kind)[r.id] }))
+      .filter(x => x.target);
+    if(!chips.length) return '';
+    return `
+      <div class="related-entries-section">
+        <div class="related-entries-label">related</div>
+        <div class="related-entries-chips">
+          ${chips.map(x => `
+            <button type="button" class="related-entry-chip" data-related-kind="${x.ref.kind}" data-related-id="${x.ref.id}">
+              <span class="related-entry-type">${x.ref.kind}</span>
+              <span class="related-entry-title">${x.target.title}</span>
+            </button>`).join('')}
+        </div>
+      </div>`;
+  }
+
+  function wireRelatedEntries(root){
+    root.querySelectorAll('.related-entry-chip').forEach(el => {
+      el.addEventListener('click', () => relatedEntryOpen(el.dataset.relatedKind, el.dataset.relatedId));
+    });
+  }
+  /* ===== /RELATED ENTRIES ===== */
+
   // ---------------- SHARED: DETAIL SCREEN ----------------
   // Write-up on the left, its referenced artworks larger on the right.
   // Artists also get a portrait next to their name.
@@ -183,12 +236,16 @@
           <div class="writeup" id="learnWriteup">${entry.writeupHtml}</div>
           <div class="examples-col" id="examplesCol"><p class="stage-body">loading referenced artworks\u2026</p></div>
         </div>
+        <!-- ===== RELATED ENTRIES (experimental, see block above) ===== -->
+        ${relatedEntriesSectionHTML(entry)}
+        <!-- ===== /RELATED ENTRIES ===== -->
         <div class="stage-actions">
           <button class="btn btn-ghost" id="backBtn">back</button>
         </div>
       </div>`;
     document.getElementById('backBtn').addEventListener('click', backAction);
     wireLearnRefs(document.getElementById('learnWriteup'));
+    wireRelatedEntries(screenEl); /* ===== RELATED ENTRIES (experimental) ===== */
 
     if(entry.kind === 'artist'){
       resolveArtistPortrait(entry).then(url => {
