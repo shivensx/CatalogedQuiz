@@ -67,10 +67,7 @@
   const DEV_SOURCES = [
     { label: 'Art Institute of Chicago', fn: fetchAIC },
     { label: 'Cleveland Museum of Art', fn: fetchCleveland },
-    { label: 'The Metropolitan Museum of Art', fn: fetchMet },
-    { label: 'SMK — National Gallery of Denmark', fn: fetchSMK },
-    { label: 'Europeana', fn: fetchEuropeana },
-    { label: 'Smithsonian', fn: fetchSmithsonian }
+    { label: 'The Metropolitan Museum of Art', fn: fetchMet }
   ];
 
   async function fetchDevSample(fn, count){

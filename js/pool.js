@@ -56,9 +56,6 @@
       fetchAIC(term).then(addToPool);
       fetchCleveland(term).then(addToPool);
       fetchMet(term).then(addToPool);
-      fetchSMK(term).then(addToPool);
-      fetchEuropeana(term).then(addToPool);
-      fetchSmithsonian(term).then(addToPool);
     }
   }
 
@@ -169,16 +166,12 @@
     };
     const promises = [];
     TERMS.forEach(t => {
-      // Slower sources first — Met needs a follow-up detail fetch per
-      // result, and SMK/Europeana/Smithsonian all add real network
-      // latency — firing these the moment the page loads gives them the
-      // longest possible head start while the visitor is still just
-      // looking at the landing page, rather than waiting until a mode
-      // is actually chosen.
+      // Met needs a follow-up detail fetch per result, so it's the
+      // slowest of the three — firing it the moment the page loads
+      // gives it the longest possible head start while the visitor is
+      // still just looking at the landing page, rather than waiting
+      // until a mode is actually chosen.
       fetchMet(t).then(addToPool);
-      fetchSMK(t).then(addToPool);
-      fetchEuropeana(t).then(addToPool);
-      fetchSmithsonian(t).then(addToPool);
       promises.push(fetchAIC(t).then(items => { addToPool(items); onFirstData(); }));
       promises.push(fetchCleveland(t).then(items => { addToPool(items); onFirstData(); }));
     });

@@ -180,38 +180,49 @@
   }
 
   /* ============================================================
-     MUSEUM DATA SOURCES
+     MOVEMENT LIST — rebuilt from scratch.
+     Ukiyo-e was deliberately dropped: it's fundamentally a print
+     medium, not painting, and this list is paintings-only. The old
+     sculpture/ceramic exclusion blacklist (isSculptureOrCeramic) is
+     gone too, superseded by strict painting-classification filtering
+     built directly into each fetcher in js/api-sources.js — an
+     allow-list against a real classification field beats a blacklist
+     of keywords to reject.
      ============================================================ */
   const TERMS = [
-    "Impressionism","Post-Impressionism","Cubism","Surrealism","Baroque",
-    "Ukiyo-e","Abstract Expressionism","Realism","Romanticism","Renaissance",
-    "Expressionism","Neoclassicism"
+    "Renaissance", "Baroque", "Rococo", "Neoclassicism", "Romanticism",
+    "Realism", "Impressionism", "Post-Impressionism", "Fauvism",
+    "Expressionism", "Art Nouveau", "Cubism", "Art Deco", "Surrealism",
+    "Futurism", "Pop Art", "Abstract Expressionism"
   ];
 
   // ---------------- MOVEMENT DATE VERIFICATION ----------------
-  // Cleveland, Met, SMK, Europeana, and Smithsonian have no movement/style
-  // field at all, so a piece only ends up labeled e.g. "Cubism" because it
-  // surfaced when THAT museum's full-text search was queried for the word
-  // "Cubism" — a keyword-relevance match, not a real classification. That
-  // can occasionally return something wildly wrong (a Baroque painting
-  // whose description happens to mention a later movement for comparison).
-  // A rough historical date range acts as a sanity check: if the piece's
-  // own recorded creation date falls way outside where that movement
-  // could plausibly exist, we reject it rather than showing a label that
-  // isn't just imprecise but factually impossible for that object.
+  // Cleveland and Met have no movement/style field at all, so a piece
+  // only ends up labeled e.g. "Cubism" because it surfaced when THAT
+  // museum's full-text search was queried for the word "Cubism" — a
+  // keyword-relevance match, not a real classification. That can
+  // occasionally return something wildly wrong. A rough historical
+  // date range acts as a sanity check: if the piece's own recorded
+  // creation date falls way outside where that movement could
+  // plausibly exist, it gets rejected rather than mislabeled.
   const MOVEMENT_YEAR_RANGES = {
+    'Renaissance': [1350, 1620],
+    'Baroque': [1580, 1750],
+    'Rococo': [1700, 1780],
+    'Neoclassicism': [1740, 1840],
+    'Romanticism': [1770, 1855],
+    'Realism': [1830, 1885],
     'Impressionism': [1855, 1900],
     'Post-Impressionism': [1885, 1910],
-    'Cubism': [1905, 1925],
-    'Surrealism': [1915, 1955],
-    'Baroque': [1580, 1750],
-    'Ukiyo-e': [1600, 1900],
-    'Abstract Expressionism': [1935, 1970],
-    'Realism': [1830, 1885],
-    'Romanticism': [1770, 1855],
-    'Renaissance': [1350, 1620],
+    'Fauvism': [1904, 1910],
     'Expressionism': [1900, 1935],
-    'Neoclassicism': [1740, 1840]
+    'Art Nouveau': [1890, 1910],
+    'Cubism': [1905, 1925],
+    'Art Deco': [1910, 1939],
+    'Surrealism': [1915, 1955],
+    'Futurism': [1909, 1944],
+    'Pop Art': [1955, 1975],
+    'Abstract Expressionism': [1935, 1970]
   };
   const MOVEMENT_YEAR_BUFFER = 15; // slack for imprecise dating / stylistic overlap
 
@@ -231,17 +242,6 @@
     const year = extractYear(dateStr);
     if(year == null) return true;
     return year >= (range[0] - MOVEMENT_YEAR_BUFFER) && year <= (range[1] + MOVEMENT_YEAR_BUFFER);
-  }
-
-  // Sculptures, ceramics, and similar 3D objects get excluded across every
-  // source: they don't fit two-dimensional movement-guessing gameplay the
-  // way paintings/works on paper do, and their medium/classification text
-  // was a repeat source of mismatched or misleading data. Checked against
-  // whatever medium/classification/type text a given source provides.
-  const SCULPTURE_PATTERN = /sculpture|\bbronze\b|\bmarble\b|ceramic|porcelain|terra[- ]?cotta|pottery|stoneware|earthenware|\brelief\b|\bbust\b|\bstatue\b|figurine|carv(ed|ing)|\bivory\b|cast (iron|stone)|glazed|\bclay\b/i;
-
-  function isSculptureOrCeramic(...fields){
-    return SCULPTURE_PATTERN.test(fields.filter(Boolean).join(' '));
   }
 
   const HEART_PATH = "M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z";

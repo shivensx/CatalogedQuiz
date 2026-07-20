@@ -1,24 +1,85 @@
-  // ---------------- FETCH: AIC ----------------
+  /* ============================================================
+     GAME POOL — MUSEUM FETCHERS
+     Rebuilt from scratch. Three sources only: AIC, Cleveland, Met.
+     SMK, Europeana, and Smithsonian were dropped from the game pool
+     entirely, none of the three has a classification field reliable
+     enough to actually confirm "this is a painting," which is a hard
+     requirement now, not a nice-to-have. (SMK is still used by the
+     Learn tab further down this file, for a specific hand-picked
+     piece with a known inventory number, that's a different,
+     narrower job than pulling random gameplay artwork.)
+
+     Two design rules apply to all three fetchers below:
+
+     1. PAINTINGS ONLY. Each source has a real classification/type
+        field (AIC: classification_title, Met: classification,
+        Cleveland: type) checked against an allow-list, not a
+        blacklist of things to exclude. Sculptures, prints,
+        photographs, textiles, ceramics, and everything else that
+        isn't a painting gets filtered out at the source.
+
+     2. GENUINE RANDOMNESS. Museum search APIs rank results by
+        relevance, which in practice means the same well-known pieces
+        surface first on every identical query. Each fetcher below
+        pulls a random page/offset/sample instead of always taking
+        whatever came back first, so repeat visits (and repeat
+        fetches within one session) surface different work instead of
+        the same handful of famous paintings every time.
+
+     Movement labeling: only AIC has real curator-assigned movement
+     tags (style_title), so AIC results are cross-checked against the
+     search term for a genuine match. Cleveland and Met have no such
+     field at all, for those two, "movement" means the term this was
+     searched under, sanity-checked against the piece's own recorded
+     date via plausibleForMovement() (see js/config.js) so a piece
+     whose date makes a given movement impossible gets rejected
+     instead of mislabeled.
+     ============================================================ */
+
+  // How many pages/offset-steps deep a fetcher is willing to reach into
+  // a large result set. Keeps requests reasonable while still reaching
+  // well past "page 1" for movements with a lot of matching work.
+  const RANDOM_PAGE_DEPTH_CAP = 20;
+
+  // ---------------- FETCH: ART INSTITUTE OF CHICAGO ----------------
   async function fetchAIC(term){
-    const fields = 'id,title,artist_title,style_title,date_display,image_id,place_of_origin,medium_display';
-    const url = `https://api.artic.edu/api/v1/artworks/search?q=${encodeURIComponent(term)}`
+    const fields = 'id,title,artist_title,style_title,date_display,image_id,place_of_origin,medium_display,classification_title';
+    const baseUrl = `https://api.artic.edu/api/v1/artworks/search?q=${encodeURIComponent(term)}`
       + `&query[term][is_public_domain]=true&fields=${fields}&limit=25`;
     try{
-      const res = await fetch(url);
-      if(!res.ok) return [];
-      const data = await res.json();
+      const res1 = await fetch(`${baseUrl}&page=1`);
+      if(!res1.ok) return [];
+      const data1 = await res1.json();
+      let items = data1.data || [];
+
+      const totalPages = (data1.pagination && data1.pagination.total_pages) || 1;
+      if(totalPages > 1){
+        const cap = Math.min(totalPages, RANDOM_PAGE_DEPTH_CAP);
+        const randomPage = 1 + Math.floor(Math.random() * cap);
+        if(randomPage !== 1){
+          try{
+            const res2 = await fetch(`${baseUrl}&page=${randomPage}`);
+            if(res2.ok){
+              const data2 = await res2.json();
+              if(data2.data && data2.data.length) items = data2.data;
+            }
+          } catch(e){ /* fall back to page 1's results */ }
+        }
+      }
+
       const needle = term.toLowerCase();
-      return (data.data || [])
+      return items
         .filter(a => a.image_id && a.artist_title && a.style_title)
         .filter(a => a.style_title.toLowerCase().includes(needle))
-        .filter(a => !isSculptureOrCeramic(a.medium_display))
+        .filter(a => a.classification_title && a.classification_title.toLowerCase().includes('paint'))
         .map(a => ({
           key: `aic-${a.id}`,
-          title: a.title || '',
+          title: a.title || 'Untitled',
           artist: a.artist_title,
           era: a.style_title,
           date: a.date_display || '',
           medium: a.medium_display || '',
+          origin: a.place_of_origin || '',
           img: `https://www.artic.edu/iiif/2/${a.image_id}/full/700,/0/default.jpg`,
           source: 'Art Institute of Chicago',
           sourceUrl: `https://www.artic.edu/artworks/${a.id}`,
@@ -27,29 +88,44 @@
     } catch(e){ return []; }
   }
 
-  // ---------------- FETCH: CLEVELAND ----------------
+  // ---------------- FETCH: CLEVELAND MUSEUM OF ART ----------------
   async function fetchCleveland(term){
-    const url = `https://openaccess-api.clevelandart.org/api/artworks/?q=${encodeURIComponent(term)}&has_image=1&limit=25`;
+    const baseUrl = `https://openaccess-api.clevelandart.org/api/artworks/?q=${encodeURIComponent(term)}&has_image=1&limit=25`;
     try{
-      const res = await fetch(url);
-      if(!res.ok) return [];
-      const data = await res.json();
-      return (data.data || [])
+      const res1 = await fetch(`${baseUrl}&skip=0`);
+      if(!res1.ok) return [];
+      const data1 = await res1.json();
+      let items = data1.data || [];
+
+      const total = (data1.info && data1.info.total) || items.length;
+      if(total > 25){
+        const maxSkip = Math.min(total - 25, RANDOM_PAGE_DEPTH_CAP * 25);
+        const randomSkip = Math.floor(Math.random() * (maxSkip + 1));
+        if(randomSkip > 0){
+          try{
+            const res2 = await fetch(`${baseUrl}&skip=${randomSkip}`);
+            if(res2.ok){
+              const data2 = await res2.json();
+              if(data2.data && data2.data.length) items = data2.data;
+            }
+          } catch(e){ /* fall back to the first page's results */ }
+        }
+      }
+
+      return items
         .map(a => {
           const creator = a.creators && a.creators[0] ? a.creators[0].description : null;
           const artist = creator ? creator.split(' (')[0].trim() : null;
           const img = (a.images && (a.images.web || a.images.print)) ? (a.images.web ? a.images.web.url : a.images.print.url) : null;
           return { a, artist, img };
         })
-        .filter(x => x.img && x.artist && plausibleForMovement(term, x.a.creation_date))
-        .filter(x => !isSculptureOrCeramic(x.a.type, x.a.technique))
+        .filter(x => x.img && x.artist)
+        .filter(x => x.a.type && x.a.type.toLowerCase().includes('paint'))
+        .filter(x => plausibleForMovement(term, x.a.creation_date))
         .map(x => ({
           key: `cma-${x.a.id}`,
-          title: x.a.title || '',
+          title: x.a.title || 'Untitled',
           artist: x.artist,
-          // Cleveland has no movement field (culture/type are things like
-          // "American, 19th century" or "Painting") — the movement this
-          // was searched under is the only reliable label to show.
           era: term,
           date: x.a.creation_date || '',
           medium: x.a.technique || '',
@@ -61,32 +137,37 @@
     } catch(e){ return []; }
   }
 
-  // ---------------- FETCH: MET (background only, slower) ----------------
+  // ---------------- FETCH: THE METROPOLITAN MUSEUM OF ART ----------------
+  // Met's search endpoint returns every matching object ID in one call
+  // (no pagination) rather than a page at a time, so randomization here
+  // means shuffling that full ID list before sampling from it, instead
+  // of always taking the IDs the API happened to list first.
   async function fetchMet(term){
     try{
       const searchUrl = `https://collectionapi.metmuseum.org/public/collection/v1/search?hasImages=true&q=${encodeURIComponent(term)}`;
       const res = await fetch(searchUrl);
       if(!res.ok) return [];
       const data = await res.json();
-      const ids = (data.objectIDs || []).slice(0, 12);
-      if(!ids.length) return [];
+      const allIds = data.objectIDs || [];
+      if(!allIds.length) return [];
+
+      const ids = shuffle([...allIds]).slice(0, 15);
       const details = await Promise.all(ids.map(id =>
         fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${id}`)
           .then(r => r.ok ? r.json() : null)
           .catch(() => null)
       ));
+
       return details
         .filter(Boolean)
         .map(o => ({ o, img: o.primaryImageSmall || o.primaryImage || null }))
-        .filter(x => !isSculptureOrCeramic(x.o.classification, x.o.medium))
-        .filter(x => x.o.isPublicDomain && x.img && x.o.artistDisplayName && plausibleForMovement(term, x.o.objectDate))
+        .filter(x => x.o.isPublicDomain && x.img && x.o.artistDisplayName)
+        .filter(x => x.o.classification && x.o.classification.toLowerCase().includes('paint'))
+        .filter(x => plausibleForMovement(term, x.o.objectDate))
         .map(x => ({
           key: `met-${x.o.objectID}`,
-          title: x.o.title || '',
+          title: x.o.title || 'Untitled',
           artist: x.o.artistDisplayName,
-          // Met's period/culture/classification aren't movement tags
-          // (they're things like "Ming dynasty" or "Paintings") — use
-          // the movement this was searched under instead.
           era: term,
           date: x.o.objectDate || '',
           medium: x.o.medium || '',
@@ -94,164 +175,6 @@
           source: 'The Metropolitan Museum of Art',
           sourceUrl: x.o.objectURL || `https://www.metmuseum.org/art/collection/search/${x.o.objectID}`,
           sourceSearchUrl: `https://www.metmuseum.org/art/collection/search?q=${encodeURIComponent(x.o.artistDisplayName)}`
-        }));
-    } catch(e){ return []; }
-  }
-
-  // ---------------- FETCH: SMK (National Gallery of Denmark) ----------------
-  // Free, no API key required. Unlike AIC, SMK doesn't reliably expose an
-  // explicit art-movement field, so this is defensive by design: if the
-  // shape of a response ever doesn't match what's expected here, individual
-  // items are just filtered out rather than throwing — same fail-safe
-  // pattern as the other sources.
-  async function fetchSMK(term){
-    try{
-      // Repeated `filters` params, not one comma-joined value — this is
-      // the format SMK's API actually expects; the joined version was
-      // likely silently ignored, forcing an unfiltered (slower) search.
-      const url = `https://api.smk.dk/api/v1/art/search/?keys=${encodeURIComponent(term)}`
-        + `&filters=${encodeURIComponent('[has_image:true]')}`
-        + `&filters=${encodeURIComponent('[public_domain:true]')}`
-        + `&rows=25`;
-      const res = await fetch(url);
-      if(!res.ok) return [];
-      const data = await res.json();
-      return (data.items || [])
-        .map(o => {
-          const titles = o.titles || [];
-          const titleEn = titles.find(t => t.language === 'en');
-          const title = (titleEn && titleEn.title) || (titles[0] && titles[0].title) || '';
-          const prod = o.production && o.production[0];
-          const artist = (Array.isArray(o.artist) && o.artist[0]) || (prod && prod.creator) || null;
-          const dateRaw = (o.production_date && o.production_date[0] && (o.production_date[0].period || o.production_date[0].start)) || '';
-          const date = typeof dateRaw === 'string' ? dateRaw.slice(0, 4) : '';
-          const medium = (Array.isArray(o.techniques) && o.techniques.join(', ')) || '';
-          const objectNames = (Array.isArray(o.object_names) ? o.object_names.map(n => n.name).join(' ') : '');
-          const img = o.image_native || o.image_thumbnail
-            || (o.image_iiif_id ? `${o.image_iiif_id}/full/400,/0/default.jpg` : null);
-          return { o, title, artist, date, medium, objectNames, img };
-        })
-        .filter(x => x.img && x.artist && plausibleForMovement(term, x.date))
-        .filter(x => !isSculptureOrCeramic(x.medium, x.objectNames) && !/skulptur|keramik/i.test(x.objectNames || ''))
-        .map(x => ({
-          key: `smk-${x.o.id}`,
-          title: x.title,
-          artist: x.artist,
-          // SMK has no movement field — use the movement this was
-          // searched under, same fix as Cleveland and Met.
-          era: term,
-          date: x.date,
-          medium: x.medium,
-          img: x.img,
-          source: 'SMK — National Gallery of Denmark',
-          sourceUrl: x.o.object_url || `https://open.smk.dk/en/artwork/image/${x.o.id}`,
-          sourceSearchUrl: `https://open.smk.dk/en/search?q=${encodeURIComponent(x.artist)}`
-        }));
-    } catch(e){ return []; }
-  }
-
-  // ---------------- FETCH: EUROPEANA ----------------
-  // Aggregates thousands of providers with wildly inconsistent metadata —
-  // there's no standard "movement" field the way AIC has style_title, so
-  // this checks the free-text subject tags for a match. Same fail-safe
-  // pattern as SMK: if the shape is ever off, items are filtered out
-  // rather than throwing.
-  const EUROPEANA_KEY = 'rogantant';
-  async function fetchEuropeana(term){
-    try{
-      // qf=LANGUAGE:en restricts to English-tagged records — Europeana
-      // aggregates thousands of European providers (Dutch institutions
-      // are especially well represented), and without this filter a lot
-      // of titles/descriptions come back in the source language instead.
-      const url = `https://api.europeana.eu/record/v2/search.json?wskey=${EUROPEANA_KEY}`
-        + `&query=${encodeURIComponent(term)}&media=true&rows=25&qf=TYPE:IMAGE&qf=LANGUAGE:en&reusability=open`;
-      const res = await fetch(url);
-      if(!res.ok) return [];
-      const data = await res.json();
-      return (data.items || [])
-        .map(o => {
-          const title = (Array.isArray(o.title) && o.title[0]) || '';
-          // dcCreator entries are sometimes a link to an authority record
-          // (e.g. a Wikidata/VIAF URI) rather than a plain name — take
-          // the first entry that isn't a URL, so we never show a raw
-          // link where an artist name should be.
-          const creators = Array.isArray(o.dcCreator) ? o.dcCreator : (o.dcCreator ? [o.dcCreator] : []);
-          const artist = creators.find(c => typeof c === 'string' && !/^https?:\/\//i.test(c.trim())) || null;
-          const date = (Array.isArray(o.year) && o.year[0]) || '';
-          const img = (Array.isArray(o.edmPreview) && o.edmPreview[0]) || null;
-          const provider = (Array.isArray(o.dataProvider) && o.dataProvider[0]) || 'Europeana';
-          const typeText = [
-            ...(Array.isArray(o.dcType) ? o.dcType : []),
-            ...(Array.isArray(o.dcFormat) ? o.dcFormat : []),
-            ...(Array.isArray(o.dcSubject) ? o.dcSubject : [])
-          ].filter(s => typeof s === 'string').join(' ');
-          return { o, title, artist, date, img, provider, typeText };
-        })
-        .filter(x => x.img && x.artist && plausibleForMovement(term, x.date))
-        .filter(x => !isSculptureOrCeramic(x.typeText, x.title))
-        .map(x => ({
-          key: `eu-${x.o.id}`,
-          title: x.title,
-          artist: x.artist,
-          // Europeana's subject tags are free-text, multilingual, and
-          // rarely name a movement — use the movement this was searched
-          // under instead, same fix as the other sources.
-          era: term,
-          date: x.date,
-          medium: '',
-          img: x.img,
-          source: `Europeana (${x.provider})`,
-          sourceUrl: x.o.guid || `https://www.europeana.eu/en/item${x.o.id}`,
-          sourceSearchUrl: `https://www.europeana.eu/en/search?query=${encodeURIComponent(x.artist)}`
-        }));
-    } catch(e){ return []; }
-  }
-
-  // ---------------- FETCH: SMITHSONIAN ----------------
-  // Same caveat as Europeana/SMK — the Smithsonian's Open Access API spans
-  // many different collecting units with inconsistent metadata, so this
-  // is defensive: several candidate fields are tried, and anything that
-  // doesn't resolve just gets filtered out instead of erroring.
-  const SMITHSONIAN_KEY = 'l0lIHKf1I2H8GxOtHISB0GxUb75SukQL62hCZA78';
-  async function fetchSmithsonian(term){
-    try{
-      const url = `https://api.si.edu/openaccess/api/v1.0/search?q=${encodeURIComponent(term)}&rows=25&api_key=${SMITHSONIAN_KEY}`;
-      const res = await fetch(url);
-      if(!res.ok) return [];
-      const data = await res.json();
-      const rows = (data.response && data.response.rows) || [];
-      return rows
-        .map(r => {
-          const desc = (r.content && r.content.descriptiveNonRepeating) || {};
-          const title = (desc.title && desc.title.content) || '';
-          const media = (desc.online_media && desc.online_media.media) || [];
-          const imgObj = media.find(m => m.type === 'Images');
-          const img = imgObj ? (imgObj.content || (imgObj.resources && imgObj.resources[0] && imgObj.resources[0].url)) : null;
-          const freetext = (r.content && r.content.freetext) || {};
-          const names = freetext.name || [];
-          const artistEntry = names.find(n => /artist|creator|painter/i.test(n.label || '')) || names[0];
-          const artist = (artistEntry && artistEntry.content) || null;
-          const dateEntry = (freetext.date && freetext.date[0] && freetext.date[0].content) || '';
-          const physDesc = freetext.physicalDescription || [];
-          const medium = (physDesc[0] && physDesc[0].content) || '';
-          const objectTypes = (freetext.objectType || []).map(t => t.content).join(' ');
-          return { r, title, artist, date: dateEntry, medium, objectTypes, img };
-        })
-        .filter(x => x.img && x.artist && plausibleForMovement(term, x.date))
-        .filter(x => !isSculptureOrCeramic(x.medium, x.objectTypes))
-        .map(x => ({
-          key: `si-${x.r.id}`,
-          title: x.title,
-          artist: x.artist,
-          // Smithsonian's culture/category tags rarely name a Western art
-          // movement — use the movement this was searched under instead.
-          era: term,
-          date: x.date,
-          medium: x.medium,
-          img: x.img,
-          source: 'Smithsonian',
-          sourceUrl: (x.r.content && x.r.content.descriptiveNonRepeating && x.r.content.descriptiveNonRepeating.record_link) || `https://www.si.edu/object/${x.r.id}`,
-          sourceSearchUrl: `https://www.si.edu/search?edan_q=${encodeURIComponent(x.artist)}`
         }));
     } catch(e){ return []; }
   }

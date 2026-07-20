@@ -19,10 +19,11 @@
     // Seed every movement up front (AIC + Cleveland are single fast
     // calls each) so the stratified picker above always has all
     // terms to choose from, not just whichever four happened to be
-    // fetched first. Met/SMK/Europeana/Smithsonian are NOT re-fetched
-    // here — warmPoolInBackground() already kicked them off the moment
-    // the page loaded, so doing it again here would just double up on
-    // the slowest requests (SMK especially) for no benefit.
+    // fetched first. Met is NOT re-fetched here — warmPoolInBackground()
+    // already kicked it off the moment the page loaded, and it's the
+    // slowest of the three (a search plus N detail fetches), so doing
+    // it again here would just double up on the slowest request for
+    // no benefit.
     const promises = [];
     TERMS.forEach(t => {
       promises.push(fetchAIC(t).then(addToPool));
