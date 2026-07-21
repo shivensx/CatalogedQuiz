@@ -12,6 +12,11 @@
     // again" on purpose — only a fresh page load resets it.
     movementDeck: [],
     itemDecks: {},
+    // When a seed is active, this holds a frozen, canonically-ordered
+    // snapshot of the pool for that specific run — see js/decks.js for
+    // why. null means "use the live, ever-growing pool" (normal
+    // unseeded behavior).
+    activePoolSnapshot: null,
     // Sliding window of recently-shown artwork keys, across every
     // surface (featured pieces, quiz decoys, CAPTCHA tiles) — used to
     // keep decoys/tiles from repeating something just shown elsewhere.

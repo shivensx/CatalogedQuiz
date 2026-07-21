@@ -7,27 +7,33 @@
 
      1. No artwork repeats as a featured/correct piece until every
         other available piece in its movement has been shown once.
-     2. Movements themselves cycle evenly — over any 17 consecutive
-        rounds, every movement appears exactly once, rather than
-        random resampling occasionally clumping 80% of a session into
-        one or two movements just by chance.
+     2. Movements themselves cycle evenly — over a full cycle, every
+        movement gets a turn before any movement gets a second one,
+        rather than random resampling occasionally clumping most of a
+        session into one or two movements just by chance.
 
      Two-level deck: a shuffled deck of the 17 movement names, dealt
-     one at a time and reshuffled only once fully cycled; and one
-     shuffled item-deck per movement, dealt the same way. Both persist
-     in `state` across "play again" on purpose — only a fresh page
-     load resets them, so the fairness holds across a whole session,
-     not just within one run.
+     one at a time; and one shuffled item-deck per movement, dealt the
+     same way. Both persist in `state` across "play again" on purpose
+     — only a fresh page load resets them, so the fairness holds
+     across a whole session, not just within one run.
+
+     A movement whose deck is empty when its turn comes up (no data
+     loaded for it yet) is deferred to the BACK of the current cycle
+     rather than dropped from it — dropping it was quietly giving
+     already-populated movements more frequent turns than ones still
+     waiting on background fetches to catch up, which undercut the
+     whole point of the movement deck.
 
      Deliberately NOT preferring already-preloaded images here (unlike
      the plain random picker below) — preload status depends on each
-     client's own network timing, which isn't reproducible. Letting it
-     influence deal order would silently break seed reproducibility
-     for the future head-to-head mode, since two clients on the same
-     seed could get different orders just from network jitter. Any
-     image that fails to actually load is caught by the existing
-     onerror handlers elsewhere, which mark it broken and deal a
-     replacement — that safety net covers this instead.
+     client's own network timing, which isn't reproducible. Any image
+     that fails to actually load is caught by the existing onerror
+     handlers elsewhere, which mark it broken and deal a replacement.
+
+     Seeded runs (see setSeed() in js/state.js) read from a frozen,
+     canonically-ordered snapshot of the pool instead of the live one
+     — see refreshDeckSourcePool() below for why.
      ============================================================ */
 
   const RECENTLY_SHOWN_WINDOW = 40;
@@ -42,19 +48,65 @@
     return state.recentlyShown.includes(key);
   }
 
+  // The array a shuffle starts from should depend only on WHICH items
+  // exist, not the order network responses happened to arrive in —
+  // otherwise the same seed can produce different shuffles just from
+  // request timing, which is exactly the "played it twice, got a
+  // different order" bug. Sorting by each item's own stable key first
+  // removes that source of variation.
+  function stableSortedPool(pool){
+    return pool.slice().sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  }
+
+  function currentDeckSourcePool(){
+    return state.activePoolSnapshot || state.pool;
+  }
+
+  // Called once per "begin" click (see startGame/startGameTimeAttack/
+  // startGameCaptcha). A seeded run freezes a snapshot of the pool as
+  // it exists right now and starts its decks completely fresh, so the
+  // ONLY thing determining that run's order is the seed itself — not
+  // leftover deck state from an earlier unseeded run, and not further
+  // background fetches arriving mid-run. Unseeded play keeps using the
+  // live, ever-growing pool and lets decks persist across runs as
+  // before, since reproducibility isn't the goal there.
+  //
+  // Honest limitation: this makes ONE run internally consistent, and
+  // makes replaying a seed reproduce the same result as long as the
+  // pool's contents haven't changed since — but if real time has
+  // passed and background fetching has genuinely added new paintings,
+  // a later replay of the same seed will reflect that larger pool and
+  // can diverge. True bit-for-bit replay regardless of elapsed time
+  // would mean caching the exact pool snapshot the first time a given
+  // seed is used, and always reusing that cached snapshot for it —
+  // real to build, just bigger than this pass, and worth doing
+  // properly once the head-to-head mode is actually underway.
+  function refreshDeckSourcePool(){
+    if(state.seed){
+      state.activePoolSnapshot = stableSortedPool(state.pool);
+      state.movementDeck = [];
+      state.itemDecks = {};
+      state.recentlyShown = []; // a seeded run must start from a fully clean slate
+    } else {
+      state.activePoolSnapshot = null;
+    }
+  }
+
   function ensureMovementDeck(){
     if(state.movementDeck.length) return;
-    const available = TERMS.filter(t => state.pool.some(a => a.era === t && !state.brokenKeys.has(a.key)));
+    const source = currentDeckSourcePool();
+    const available = TERMS.filter(t => source.some(a => a.era === t && !state.brokenKeys.has(a.key)));
     state.movementDeck = shuffle(available.length ? available : [...TERMS]);
   }
 
-  // Rebuilt fresh from whatever's currently in the pool for that movement
-  // each time it's reshuffled — background fetching keeps adding items
-  // over a session, so a later reshuffle naturally picks up the growth
-  // instead of being stuck with a stale first-look snapshot forever.
+  // Rebuilt fresh from the current source pool each time it's
+  // reshuffled — for unseeded play, background fetching keeps adding
+  // items over a session, so a later reshuffle naturally picks up that
+  // growth instead of being stuck with a stale snapshot forever.
   function ensureItemDeck(movement){
     if(state.itemDecks[movement] && state.itemDecks[movement].length) return;
-    const items = state.pool.filter(a => a.era === movement && !state.brokenKeys.has(a.key));
+    const source = currentDeckSourcePool();
+    const items = source.filter(a => a.era === movement && !state.brokenKeys.has(a.key));
     state.itemDecks[movement] = shuffle(items);
   }
 
@@ -64,7 +116,7 @@
   // that IT decides which movement comes next, not the caller.
   function dealNextArtwork(){
     ensureMovementDeck();
-    const maxAttempts = state.movementDeck.length + TERMS.length + 1;
+    const maxAttempts = TERMS.length * 3 + 5;
     for(let attempts = 0; attempts < maxAttempts; attempts++){
       if(!state.movementDeck.length){
         ensureMovementDeck();
@@ -77,17 +129,28 @@
 
       if(state.itemDecks[movement].length){
         state.movementDeck = state.movementDeck.slice(1);
-        const card = state.itemDecks[movement][0];
-        state.itemDecks[movement] = state.itemDecks[movement].slice(1);
+        const deck = state.itemDecks[movement];
+        // Prefer a card that hasn't been shown very recently (covers a
+        // thin deck that just cycled back sooner than a full session
+        // would ideally like), without breaking deck order more than
+        // necessary — look for the first eligible card, don't reshuffle.
+        let idx = deck.findIndex(a => !isRecentlyShown(a.key));
+        if(idx === -1) idx = 0;
+        const card = deck[idx];
+        state.itemDecks[movement] = deck.slice(0, idx).concat(deck.slice(idx + 1));
         markShown(card.key);
         return card;
       }
-      // This movement has nothing available right now — skip it this
-      // cycle rather than getting stuck, try the next one.
-      state.movementDeck = state.movementDeck.slice(1);
+      // Nothing available for this movement RIGHT NOW — defer it to the
+      // BACK of the current cycle instead of dropping it, so it gets
+      // another chance once background fetching has caught up, rather
+      // than sitting out the rest of this cycle entirely (which was
+      // quietly giving already-populated movements more frequent turns).
+      state.movementDeck = [...state.movementDeck.slice(1), movement];
     }
     // Total fallback for a near-empty pool (e.g. right at boot).
-    const fallback = state.pool.find(a => !state.brokenKeys.has(a.key)) || state.pool[0];
+    const source = currentDeckSourcePool();
+    const fallback = source.find(a => !state.brokenKeys.has(a.key)) || source[0];
     if(fallback) markShown(fallback.key);
     return fallback;
   }

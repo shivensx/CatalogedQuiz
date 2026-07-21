@@ -57,6 +57,7 @@
     const ok = await ensurePool();
     if(!ok){ renderError(); return; }
     await waitMinimum(loadStart);
+    refreshDeckSourcePool();
 
     clearTATimers();
     state.masterClock = TA_MASTER_START;

@@ -41,6 +41,7 @@
     const ok = await ensurePool();
     if(!ok){ renderError(); return; }
     await waitMinimum(loadStart);
+    refreshDeckSourcePool();
 
     state.health = 10;
     state.correctCount = 0;
