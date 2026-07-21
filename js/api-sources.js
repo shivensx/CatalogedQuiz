@@ -192,33 +192,52 @@
   // (no pagination) rather than a page at a time, so randomization here
   // means shuffling that full ID list before sampling from it, instead
   // of always taking the IDs the API happened to list first.
+  // Maps each movement to the Met department it actually lives in.
+  // Sidesteps the real problem entirely instead of working around it:
+  // Met has no movement/style field anywhere in its data, so searching
+  // free text for a movement name has nowhere to actually match. This
+  // uses /objects?departmentIds=, a real documented endpoint that needs
+  // no query text at all — just returns every object in that department
+  // — and lets classification + Wikidata verification (below) do 100%
+  // of the actual movement determination, the same way it already does
+  // for AIC and Cleveland.
+  const MET_DEPARTMENT_FOR_MOVEMENT = {
+    'Renaissance': 11, 'Baroque': 11, 'Rococo': 11, 'Neoclassicism': 11,
+    'Romanticism': 11, 'Realism': 11, 'Impressionism': 11, 'Post-Impressionism': 11,
+    'Fauvism': 21, 'Expressionism': 21, 'Art Nouveau': 21, 'Cubism': 21,
+    'Art Deco': 21, 'Surrealism': 21, 'Futurism': 21, 'Pop Art': 21,
+    'Abstract Expressionism': 21
+  }; // 11 = European Paintings, 21 = Modern Art
+
+  // The full ID list for a department doesn't depend on which movement
+  // is being searched, so it's fetched once and reused — cheaper than
+  // re-querying per movement, and each department can hold thousands of
+  // objects in one lightweight response (just an ID array).
+  const metDeptIdsCache = new Map();
+
+  async function fetchMetDepartmentIds(deptId){
+    if(metDeptIdsCache.has(deptId)) return metDeptIdsCache.get(deptId);
+    try{
+      const res = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects?departmentIds=${deptId}`);
+      const ids = res.ok ? ((await res.json()).objectIDs || []) : [];
+      metDeptIdsCache.set(deptId, ids);
+      return ids;
+    } catch(e){
+      metDeptIdsCache.set(deptId, []);
+      return [];
+    }
+  }
+
   async function fetchMet(term){
     try{
-      // Met has no movement/style field anywhere in its data (confirmed
-      // against the real documented schema — classification, objectName,
-      // culture, period, tags, none of them), so searching free-text for
-      // a movement name usually finds nothing: there's nowhere for that
-      // word to actually appear. medium=Paintings is a real, documented,
-      // server-side filter, so use that to reliably get paintings, and
-      // fall back to a broad paintings query if the topical search comes
-      // up empty. Wikidata verification below is what actually
-      // determines the real movement either way, not Met's own search
-      // relevance for the term.
-      const baseParams = `medium=Paintings&hasImages=true`;
-      let searchUrl = `https://collectionapi.metmuseum.org/public/collection/v1/search?${baseParams}&q=${encodeURIComponent(term)}`;
-      let res = await fetch(searchUrl);
-      let data = res.ok ? await res.json() : null;
-      let allIds = (data && data.objectIDs) || [];
-
-      if(!allIds.length){
-        const fallbackUrl = `https://collectionapi.metmuseum.org/public/collection/v1/search?${baseParams}&departmentId=11&q=painting`;
-        const res2 = await fetch(fallbackUrl);
-        const data2 = res2.ok ? await res2.json() : null;
-        allIds = (data2 && data2.objectIDs) || [];
-      }
+      const deptId = MET_DEPARTMENT_FOR_MOVEMENT[term] || 11;
+      const allIds = await fetchMetDepartmentIds(deptId);
       if(!allIds.length) return [];
 
-      const ids = shuffle([...allIds]).slice(0, 15);
+      // /objects (unlike /search) has no hasImages filter, and mixes in
+      // non-paintings too, so this samples more candidates up front to
+      // leave enough real paintings standing after the filters below.
+      const ids = shuffle([...allIds]).slice(0, 25);
       const details = await Promise.all(ids.map(id =>
         fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${id}`)
           .then(r => r.ok ? r.json() : null)
