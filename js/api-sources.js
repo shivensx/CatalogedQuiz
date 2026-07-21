@@ -98,8 +98,13 @@
       const verified = await mapWithConcurrency(rawCandidates, 4, async (a) => {
         const ulanId = await fetchAICArtistUlan(a.artist_id);
         const birthYearHint = extractBirthYearHint(a.artist_display);
-        const movements = await resolveArtistMovements({ name: a.artist_title, birthYearHint, ulanId });
-        if(!movements.length) return null; // Wikidata has no confident classification — excluded, not force-fit
+        const rawMovements = await resolveArtistMovements({ name: a.artist_title, birthYearHint, ulanId });
+        if(!rawMovements.length) return null; // Wikidata has no confident classification — excluded, not force-fit
+        // Artist-level movements narrowed to what THIS piece's own date
+        // supports — an artist whose career spanned movements shouldn't
+        // have every piece labeled with every movement they ever touched.
+        const movements = narrowMovementsByDate(rawMovements, a.date_display);
+        if(!movements.length) return null; // none of the artist's real movements fit this piece's date — excluded, not mislabeled
         const era = movements.includes(term) ? term : movements[0];
         if(!plausibleForMovement(era, a.date_display)) return null;
         return {
@@ -158,7 +163,9 @@
 
       const verified = await mapWithConcurrency(rawCandidates, 4, async (x) => {
         const birthYearHint = extractBirthYearHint(x.creatorDesc);
-        const movements = await resolveArtistMovements({ name: x.artist, birthYearHint });
+        const rawMovements = await resolveArtistMovements({ name: x.artist, birthYearHint });
+        if(!rawMovements.length) return null;
+        const movements = narrowMovementsByDate(rawMovements, x.a.creation_date);
         if(!movements.length) return null;
         const era = movements.includes(term) ? term : movements[0];
         if(!plausibleForMovement(era, x.a.creation_date)) return null;
@@ -210,7 +217,9 @@
 
       const verified = await mapWithConcurrency(rawCandidates, 4, async (x) => {
         const birthYearHint = extractBirthYearHint(x.o.artistDisplayBio);
-        const movements = await resolveArtistMovements({ name: x.o.artistDisplayName, birthYearHint });
+        const rawMovements = await resolveArtistMovements({ name: x.o.artistDisplayName, birthYearHint });
+        if(!rawMovements.length) return null;
+        const movements = narrowMovementsByDate(rawMovements, x.o.objectDate);
         if(!movements.length) return null;
         const era = movements.includes(term) ? term : movements[0];
         if(!plausibleForMovement(era, x.o.objectDate)) return null;
