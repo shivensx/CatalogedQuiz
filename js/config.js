@@ -263,6 +263,13 @@
   const MOVEMENT_DISAMBIGUATION_TOLERANCE = 5;
 
   function narrowMovementsByDate(movements, dateStr){
+    // Nothing to disambiguate between if the artist only has one movement
+    // on Wikidata at all — the tight window below exists specifically for
+    // choosing between several real options (the Mondrian case), not for
+    // second-guessing a single, unambiguous answer. Let the looser
+    // plausibleForMovement() check (already run afterward everywhere this
+    // is called) be the actual safety net for that common case.
+    if(movements.length <= 1) return movements;
     const year = extractYear(dateStr);
     if(year == null) return movements; // nothing to narrow with — trust Wikidata's tags as-is
     return movements.filter(m => {

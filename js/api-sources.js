@@ -65,7 +65,7 @@
   async function fetchAIC(term){
     const fields = 'id,title,artist_title,artist_id,artist_display,date_display,image_id,place_of_origin,medium_display,artwork_type_title';
     const baseUrl = `https://api.artic.edu/api/v1/artworks/search?q=${encodeURIComponent(term)}`
-      + `&fields=${fields}&limit=25`;
+      + `&fields=${fields}&limit=40`;
     try{
       const res1 = await fetch(`${baseUrl}&page=1`);
       if(!res1.ok) return [];
@@ -95,7 +95,7 @@
         .filter(a => a.artwork_type_title === 'Painting')
         .filter(a => !isLikelyNonPaintingMedium(a.medium_display));
 
-      const verified = await mapWithConcurrency(rawCandidates, 4, async (a) => {
+      const verified = await mapWithConcurrency(rawCandidates, 6, async (a) => {
         const ulanId = await fetchAICArtistUlan(a.artist_id);
         const birthYearHint = extractBirthYearHint(a.artist_display);
         const rawMovements = await resolveArtistMovements({ name: a.artist_title, birthYearHint, ulanId });
@@ -128,7 +128,7 @@
 
   // ---------------- FETCH: CLEVELAND MUSEUM OF ART ----------------
   async function fetchCleveland(term){
-    const baseUrl = `https://openaccess-api.clevelandart.org/api/artworks/?q=${encodeURIComponent(term)}&has_image=1&limit=25`;
+    const baseUrl = `https://openaccess-api.clevelandart.org/api/artworks/?q=${encodeURIComponent(term)}&has_image=1&limit=40`;
     try{
       const res1 = await fetch(`${baseUrl}&skip=0`);
       if(!res1.ok) return [];
@@ -161,7 +161,7 @@
         .filter(x => x.a.type === 'Painting')
         .filter(x => !isLikelyNonPaintingMedium(x.a.technique));
 
-      const verified = await mapWithConcurrency(rawCandidates, 4, async (x) => {
+      const verified = await mapWithConcurrency(rawCandidates, 6, async (x) => {
         const birthYearHint = extractBirthYearHint(x.creatorDesc);
         const rawMovements = await resolveArtistMovements({ name: x.artist, birthYearHint });
         if(!rawMovements.length) return null;
@@ -237,7 +237,7 @@
       // /objects (unlike /search) has no hasImages filter, and mixes in
       // non-paintings too, so this samples more candidates up front to
       // leave enough real paintings standing after the filters below.
-      const ids = shuffle([...allIds]).slice(0, 25);
+      const ids = shuffle([...allIds]).slice(0, 35);
       const details = await Promise.all(ids.map(id =>
         fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${id}`)
           .then(r => r.ok ? r.json() : null)
@@ -251,7 +251,7 @@
         .filter(x => x.o.classification === 'Paintings')
         .filter(x => !isLikelyNonPaintingMedium(x.o.medium));
 
-      const verified = await mapWithConcurrency(rawCandidates, 4, async (x) => {
+      const verified = await mapWithConcurrency(rawCandidates, 6, async (x) => {
         const birthYearHint = extractBirthYearHint(x.o.artistDisplayBio);
         const wikidataId = extractWikidataQid(x.o.artistWikidata_URL);
         const rawMovements = await resolveArtistMovements({ name: x.o.artistDisplayName, birthYearHint, wikidataId });

@@ -29,10 +29,13 @@
     // Check the thinnest movement specifically, not just overall pool
     // size — a healthy total pool could still have one or two movements
     // running low, which is exactly the case that matters for keeping
-    // the 17-deck distribution fair.
+    // the 17-deck distribution fair. Target depth raised from 8 to 20:
+    // given how much survival-rate loss the painting/Wikidata filter
+    // chain causes per raw candidate, stopping at 8 was cutting off
+    // background growth well before a movement had real depth.
     const counts = TERMS.map(t => state.pool.filter(a => a.era === t).length);
     const minCount = Math.min(...counts);
-    if(minCount < 8){
+    if(minCount < 20){
       const term = TERMS[state.termCursor % TERMS.length];
       state.termCursor++;
       fetchAIC(term).then(addToPool);
