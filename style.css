@@ -386,6 +386,16 @@
     padding:6px 0;
   }
 
+  .seed-field{ margin-top:22px; max-width:44ch; }
+  .seed-label{ display:block; font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--text-dim); margin-bottom:6px; }
+  .seed-input{
+    width:100%; font-family:var(--font-sans); font-size:15px;
+    padding:11px 14px; border-radius:8px;
+    background:var(--card); border:1.5px solid var(--text-dim); color:var(--text);
+  }
+  .seed-input:focus{ outline:none; border-color:var(--text); }
+  .seed-hint{ font-size:12.5px; color:var(--text-dim); margin:8px 0 0; line-height:1.5; }
+
   /* ---------- loading ---------- */
   .loading{ display:flex; flex-direction:column; align-items:center; gap:16px; padding:80px 20px; text-align:center; }
   .spinner{
