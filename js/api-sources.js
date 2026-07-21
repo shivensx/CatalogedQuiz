@@ -194,11 +194,28 @@
   // of always taking the IDs the API happened to list first.
   async function fetchMet(term){
     try{
-      const searchUrl = `https://collectionapi.metmuseum.org/public/collection/v1/search?hasImages=true&q=${encodeURIComponent(term)}`;
-      const res = await fetch(searchUrl);
-      if(!res.ok) return [];
-      const data = await res.json();
-      const allIds = data.objectIDs || [];
+      // Met has no movement/style field anywhere in its data (confirmed
+      // against the real documented schema — classification, objectName,
+      // culture, period, tags, none of them), so searching free-text for
+      // a movement name usually finds nothing: there's nowhere for that
+      // word to actually appear. medium=Paintings is a real, documented,
+      // server-side filter, so use that to reliably get paintings, and
+      // fall back to a broad paintings query if the topical search comes
+      // up empty. Wikidata verification below is what actually
+      // determines the real movement either way, not Met's own search
+      // relevance for the term.
+      const baseParams = `medium=Paintings&hasImages=true`;
+      let searchUrl = `https://collectionapi.metmuseum.org/public/collection/v1/search?${baseParams}&q=${encodeURIComponent(term)}`;
+      let res = await fetch(searchUrl);
+      let data = res.ok ? await res.json() : null;
+      let allIds = (data && data.objectIDs) || [];
+
+      if(!allIds.length){
+        const fallbackUrl = `https://collectionapi.metmuseum.org/public/collection/v1/search?${baseParams}&departmentId=11&q=painting`;
+        const res2 = await fetch(fallbackUrl);
+        const data2 = res2.ok ? await res2.json() : null;
+        allIds = (data2 && data2.objectIDs) || [];
+      }
       if(!allIds.length) return [];
 
       const ids = shuffle([...allIds]).slice(0, 15);

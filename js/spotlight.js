@@ -85,6 +85,56 @@
     return results;
   }
 
+  const devDeckState = {}; // movement -> { cards: [...], index: 0 }
+
+  function buildDevDecks(){
+    TERMS.forEach(movement => {
+      const items = state.pool.filter(a => a.era === movement);
+      devDeckState[movement] = { cards: shuffle(items), index: 0 };
+    });
+  }
+
+  function devDeckCardHTML(movement){
+    const d = devDeckState[movement];
+    if(!d || !d.cards.length){
+      return `<span class="dev-deck-empty">no cards loaded yet</span>`;
+    }
+    const card = d.cards[d.index % d.cards.length];
+    return `
+      <img src="${card.img}" alt="" loading="lazy" referrerpolicy="no-referrer">
+      <span class="dev-deck-cap">
+        <span class="dev-deck-artist">${card.artist}</span>
+        <span class="dev-deck-era">${card.era}</span>
+        <span class="dev-deck-source">${card.source}</span>
+        <span class="dev-deck-count">${(d.index % d.cards.length) + 1} / ${d.cards.length}</span>
+      </span>`;
+  }
+
+  function renderDevDecks(){
+    buildDevDecks();
+    const container = document.getElementById('devDecksGrid');
+    if(!container) return;
+    container.innerHTML = TERMS.map(movement => `
+      <div class="dev-deck">
+        <div class="dev-deck-stack">
+          <div class="dev-deck-back"></div>
+          <div class="dev-deck-back2"></div>
+          <button type="button" class="dev-deck-card" data-movement="${movement}">${devDeckCardHTML(movement)}</button>
+        </div>
+        <div class="dev-deck-label">${movement}</div>
+      </div>`).join('');
+
+    container.querySelectorAll('.dev-deck-card').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const movement = btn.dataset.movement;
+        const d = devDeckState[movement];
+        if(!d || !d.cards.length) return;
+        d.index = (d.index + 1) % d.cards.length;
+        btn.innerHTML = devDeckCardHTML(movement);
+      });
+    });
+  }
+
   function renderDevPage(){
     state.screen = 'dev';
     updateChrome();
@@ -97,11 +147,22 @@
             <h3 class="dev-group-title">${s.label}</h3>
             <p class="dev-loading">loading…</p>
           </div>`).join('')}</div>
+
+        <div class="dev-decks-section">
+          <div class="dev-decks-header">
+            <h3 class="dev-group-title">movement decks <span class="dev-count">(live pool — click a card to flip to the next one)</span></h3>
+            <button class="btn btn-ghost" id="refreshDecksBtn">refresh from pool</button>
+          </div>
+          <div class="dev-decks-grid" id="devDecksGrid"></div>
+        </div>
+
         <div class="stage-actions">
           <button class="btn btn-ghost" id="backBtn">back</button>
         </div>
       </div>`;
     document.getElementById('backBtn').addEventListener('click', renderLanding);
+    document.getElementById('refreshDecksBtn').addEventListener('click', renderDevDecks);
+    renderDevDecks();
 
     const groups = document.querySelectorAll('#devResults .dev-group');
     DEV_SOURCES.forEach((s, i) => {
