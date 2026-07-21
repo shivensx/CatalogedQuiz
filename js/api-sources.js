@@ -217,7 +217,8 @@
 
       const verified = await mapWithConcurrency(rawCandidates, 4, async (x) => {
         const birthYearHint = extractBirthYearHint(x.o.artistDisplayBio);
-        const rawMovements = await resolveArtistMovements({ name: x.o.artistDisplayName, birthYearHint });
+        const wikidataId = extractWikidataQid(x.o.artistWikidata_URL);
+        const rawMovements = await resolveArtistMovements({ name: x.o.artistDisplayName, birthYearHint, wikidataId });
         if(!rawMovements.length) return null;
         const movements = narrowMovementsByDate(rawMovements, x.o.objectDate);
         if(!movements.length) return null;

@@ -65,6 +65,31 @@
     return result;
   }
 
+  // Met (and possibly other sources later) expose the artist's Wikidata
+  // item directly (artistWikidata_URL, e.g. ".../wiki/Q5582") — an exact
+  // ID needs no name-search step at all, cheaper and more precise than
+  // even the ULAN path, since there's no matching/disambiguation involved.
+  async function fetchMovementsByWikidataId(qid){
+    const key = wikidataCacheKey('qid', qid);
+    if(WIKIDATA_MOVEMENT_CACHE.has(key)) return WIKIDATA_MOVEMENT_CACHE.get(key);
+    const query = `SELECT ?movementLabel WHERE {
+      wd:${qid} wdt:P135 ?movement.
+      SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+    }`;
+    const bindings = await sparqlQuery(query);
+    const result = matchMovementLabels(bindings);
+    WIKIDATA_MOVEMENT_CACHE.set(key, result);
+    return result;
+  }
+
+  // Pulls the Q-ID out of a Wikidata URL like
+  // "https://www.wikidata.org/wiki/Q5582" -> "Q5582".
+  function extractWikidataQid(url){
+    if(!url) return null;
+    const m = String(url).match(/Q\d+/);
+    return m ? m[0] : null;
+  }
+
   async function searchWikidataEntity(name){
     const url = `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(name)}`
       + `&language=en&type=item&format=json&origin=*&limit=5`;
@@ -121,6 +146,11 @@
   // Returns a string[] of matched movements (possibly empty — empty means
   // "exclude this candidate," not "assume the searched term is right").
   async function resolveArtistMovements(artist){
+    if(artist.wikidataId){
+      const viaQid = await fetchMovementsByWikidataId(artist.wikidataId);
+      if(viaQid.length) return viaQid;
+      // No P135 on this exact item — fall through rather than give up.
+    }
     if(artist.ulanId){
       const viaUlan = await fetchMovementsByUlan(artist.ulanId);
       if(viaUlan.length) return viaUlan;
