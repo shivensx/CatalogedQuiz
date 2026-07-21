@@ -244,6 +244,34 @@
     return year >= (range[0] - MOVEMENT_YEAR_BUFFER) && year <= (range[1] + MOVEMENT_YEAR_BUFFER);
   }
 
+  // ---------------- MULTI-MOVEMENT DISAMBIGUATION ----------------
+  // Wikidata's P135 is attached to the ARTIST, and often lists every
+  // movement their career passed through — real and correct at the
+  // artist level, but not automatically true of any one specific piece.
+  // An artist whose style changed dramatically over time (Mondrian's
+  // early Post-Impressionist-influenced work vs. his later geometric
+  // abstraction is the case that surfaced this) would otherwise get
+  // every one of their pieces labeled with every movement they ever
+  // touched. This narrows an artist's full verified movement list down
+  // to just the one(s) whose date window the SPECIFIC piece's own
+  // recorded date actually falls in — deliberately tighter than
+  // MOVEMENT_YEAR_BUFFER above, since this is choosing among several
+  // already-confirmed-real options, not loosely sanity-checking one
+  // uncertain guess. If nothing survives the narrowing, the piece
+  // should be excluded rather than mislabeled with a movement that's
+  // only true of a different period of that artist's career.
+  const MOVEMENT_DISAMBIGUATION_TOLERANCE = 5;
+
+  function narrowMovementsByDate(movements, dateStr){
+    const year = extractYear(dateStr);
+    if(year == null) return movements; // nothing to narrow with — trust Wikidata's tags as-is
+    return movements.filter(m => {
+      const range = MOVEMENT_YEAR_RANGES[m];
+      if(!range) return true; // no window data for this movement — don't penalize it
+      return year >= (range[0] - MOVEMENT_DISAMBIGUATION_TOLERANCE) && year <= (range[1] + MOVEMENT_DISAMBIGUATION_TOLERANCE);
+    });
+  }
+
   // ---------------- PAINTING FILTER: SECONDARY SAFETY NET ----------------
   // Primary painting filtering happens per-source against each museum's own
   // object-type field (AIC: artwork_type_title, Met: classification,
