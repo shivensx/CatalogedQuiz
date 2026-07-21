@@ -1,39 +1,39 @@
   /* ============================================================
      GAME POOL — MUSEUM FETCHERS
-     Rebuilt from scratch. Three sources only: AIC, Cleveland, Met.
-     SMK, Europeana, and Smithsonian were dropped from the game pool
-     entirely, none of the three has a classification field reliable
-     enough to actually confirm "this is a painting," which is a hard
-     requirement now, not a nice-to-have. (SMK is still used by the
-     Learn tab further down this file, for a specific hand-picked
-     piece with a known inventory number, that's a different,
-     narrower job than pulling random gameplay artwork.)
+     Three sources: AIC, Cleveland, Met. SMK, Europeana, and
+     Smithsonian stay out of the game pool (kept only for the Learn
+     tab's specific hand-picked lookups further down this file).
 
-     Two design rules apply to all three fetchers below:
+     Painting filtering, two layers:
+     1. PRIMARY — exact match against each source's own real
+        object-type field: AIC's artwork_type_title, Met's
+        classification, Cleveland's type. Not a substring match, not
+        a blacklist of things to exclude.
+     2. SECONDARY — a medium/technique text safety net
+        (isLikelyNonPaintingMedium, see js/config.js) for the records
+        a museum still mislabels despite the type field.
 
-     1. PAINTINGS ONLY. Each source has a real classification/type
-        field (AIC: classification_title, Met: classification,
-        Cleveland: type) checked against an allow-list, not a
-        blacklist of things to exclude. Sculptures, prints,
-        photographs, textiles, ceramics, and everything else that
-        isn't a painting gets filtered out at the source.
+     Movement verification is done live against Wikidata (see
+     js/wikidata.js) for all three sources, including AIC — even
+     though AIC has its own curator-assigned style field, Wikidata is
+     now the single cross-checked standard for all three, not just a
+     patch for the two sources that lack one. AIC additionally
+     resolves a Getty ULAN id per artist for an exact (not name-text)
+     Wikidata match; Met and Cleveland fall back to name + a
+     best-effort birth-year hint pulled from whatever bio text the
+     source provides. A piece Wikidata can't confidently classify
+     into one of our 17 movements is excluded, not force-fit — and a
+     piece can carry more than one real movement (era = the single
+     display/grouping label; eras = the full verified set, used for
+     scoring so a genuinely multi-movement piece isn't marked wrong
+     for a fair answer). The old date-range plausibility check
+     (plausibleForMovement) stays on as an additional fallback layer
+     after Wikidata's verdict, not removed.
 
-     2. GENUINE RANDOMNESS. Museum search APIs rank results by
-        relevance, which in practice means the same well-known pieces
-        surface first on every identical query. Each fetcher below
-        pulls a random page/offset/sample instead of always taking
-        whatever came back first, so repeat visits (and repeat
-        fetches within one session) surface different work instead of
-        the same handful of famous paintings every time.
-
-     Movement labeling: only AIC has real curator-assigned movement
-     tags (style_title), so AIC results are cross-checked against the
-     search term for a genuine match. Cleveland and Met have no such
-     field at all, for those two, "movement" means the term this was
-     searched under, sanity-checked against the piece's own recorded
-     date via plausibleForMovement() (see js/config.js) so a piece
-     whose date makes a given movement impossible gets rejected
-     instead of mislabeled.
+     Randomization: museum search APIs rank by relevance, so the same
+     well-known pieces would otherwise surface first every time. Each
+     fetcher below pulls a random page/offset/sample instead of
+     always taking whatever came back first.
      ============================================================ */
 
   // How many pages/offset-steps deep a fetcher is willing to reach into
@@ -41,9 +41,29 @@
   // well past "page 1" for movements with a lot of matching work.
   const RANDOM_PAGE_DEPTH_CAP = 20;
 
+  // Small caches so the same artist (which often appears across multiple
+  // candidate paintings, within one fetch and across a session) only
+  // triggers the extra network round-trips once.
+  const aicUlanCache = new Map(); // AIC artist_id -> ULAN id | null
+
+  async function fetchAICArtistUlan(artistId){
+    if(!artistId) return null;
+    if(aicUlanCache.has(artistId)) return aicUlanCache.get(artistId);
+    let ulan = null;
+    try{
+      const res = await fetch(`https://api.artic.edu/api/v1/agents/${artistId}?fields=id,ulan_id`);
+      if(res.ok){
+        const data = await res.json();
+        ulan = (data.data && data.data.ulan_id) || null;
+      }
+    } catch(e){ /* ignore, falls back to name-based lookup */ }
+    aicUlanCache.set(artistId, ulan);
+    return ulan;
+  }
+
   // ---------------- FETCH: ART INSTITUTE OF CHICAGO ----------------
   async function fetchAIC(term){
-    const fields = 'id,title,artist_title,style_title,date_display,image_id,place_of_origin,medium_display,classification_title';
+    const fields = 'id,title,artist_title,artist_id,artist_display,date_display,image_id,place_of_origin,medium_display,artwork_type_title';
     const baseUrl = `https://api.artic.edu/api/v1/artworks/search?q=${encodeURIComponent(term)}`
       + `&fields=${fields}&limit=25`;
     try{
@@ -67,16 +87,27 @@
         }
       }
 
-      const needle = term.toLowerCase();
-      return items
-        .filter(a => a.image_id && a.artist_title && a.style_title)
-        .filter(a => a.style_title.toLowerCase().includes(needle))
-        .filter(a => a.classification_title && a.classification_title.toLowerCase().includes('paint'))
-        .map(a => ({
+      // Primary painting filter: exact match on AIC's real object-type
+      // field. Secondary safety net: reject anything whose medium text
+      // still names a non-painting material despite the type field.
+      const rawCandidates = items
+        .filter(a => a.image_id && a.artist_title)
+        .filter(a => a.artwork_type_title === 'Painting')
+        .filter(a => !isLikelyNonPaintingMedium(a.medium_display));
+
+      const verified = await mapWithConcurrency(rawCandidates, 4, async (a) => {
+        const ulanId = await fetchAICArtistUlan(a.artist_id);
+        const birthYearHint = extractBirthYearHint(a.artist_display);
+        const movements = await resolveArtistMovements({ name: a.artist_title, birthYearHint, ulanId });
+        if(!movements.length) return null; // Wikidata has no confident classification — excluded, not force-fit
+        const era = movements.includes(term) ? term : movements[0];
+        if(!plausibleForMovement(era, a.date_display)) return null;
+        return {
           key: `aic-${a.id}`,
           title: a.title || 'Untitled',
           artist: a.artist_title,
-          era: a.style_title,
+          era,
+          eras: movements,
           date: a.date_display || '',
           medium: a.medium_display || '',
           origin: a.place_of_origin || '',
@@ -84,7 +115,9 @@
           source: 'Art Institute of Chicago',
           sourceUrl: `https://www.artic.edu/artworks/${a.id}`,
           sourceSearchUrl: `https://www.artic.edu/collection?q=${encodeURIComponent(a.artist_title)}`
-        }));
+        };
+      });
+      return verified.filter(Boolean);
     } catch(e){ return []; }
   }
 
@@ -112,28 +145,38 @@
         }
       }
 
-      return items
+      const rawCandidates = items
         .map(a => {
-          const creator = a.creators && a.creators[0] ? a.creators[0].description : null;
-          const artist = creator ? creator.split(' (')[0].trim() : null;
+          const creatorDesc = a.creators && a.creators[0] ? a.creators[0].description : null;
+          const artist = creatorDesc ? creatorDesc.split(' (')[0].trim() : null;
           const img = (a.images && (a.images.web || a.images.print)) ? (a.images.web ? a.images.web.url : a.images.print.url) : null;
-          return { a, artist, img };
+          return { a, artist, img, creatorDesc };
         })
         .filter(x => x.img && x.artist)
-        .filter(x => x.a.type && x.a.type.toLowerCase().includes('paint'))
-        .filter(x => plausibleForMovement(term, x.a.creation_date))
-        .map(x => ({
+        .filter(x => x.a.type === 'Painting')
+        .filter(x => !isLikelyNonPaintingMedium(x.a.technique));
+
+      const verified = await mapWithConcurrency(rawCandidates, 4, async (x) => {
+        const birthYearHint = extractBirthYearHint(x.creatorDesc);
+        const movements = await resolveArtistMovements({ name: x.artist, birthYearHint });
+        if(!movements.length) return null;
+        const era = movements.includes(term) ? term : movements[0];
+        if(!plausibleForMovement(era, x.a.creation_date)) return null;
+        return {
           key: `cma-${x.a.id}`,
           title: x.a.title || 'Untitled',
           artist: x.artist,
-          era: term,
+          era,
+          eras: movements,
           date: x.a.creation_date || '',
           medium: x.a.technique || '',
           img: x.img,
           source: 'Cleveland Museum of Art',
           sourceUrl: `https://www.clevelandart.org/art/${x.a.id}`,
           sourceSearchUrl: `https://www.clevelandart.org/art/collection/search?search_api_fulltext=${encodeURIComponent(x.artist)}`
-        }));
+        };
+      });
+      return verified.filter(Boolean);
     } catch(e){ return []; }
   }
 
@@ -158,24 +201,34 @@
           .catch(() => null)
       ));
 
-      return details
+      const rawCandidates = details
         .filter(Boolean)
         .map(o => ({ o, img: o.primaryImageSmall || o.primaryImage || null }))
         .filter(x => x.img && x.o.artistDisplayName)
-        .filter(x => x.o.classification && x.o.classification.toLowerCase().includes('paint'))
-        .filter(x => plausibleForMovement(term, x.o.objectDate))
-        .map(x => ({
+        .filter(x => x.o.classification === 'Paintings')
+        .filter(x => !isLikelyNonPaintingMedium(x.o.medium));
+
+      const verified = await mapWithConcurrency(rawCandidates, 4, async (x) => {
+        const birthYearHint = extractBirthYearHint(x.o.artistDisplayBio);
+        const movements = await resolveArtistMovements({ name: x.o.artistDisplayName, birthYearHint });
+        if(!movements.length) return null;
+        const era = movements.includes(term) ? term : movements[0];
+        if(!plausibleForMovement(era, x.o.objectDate)) return null;
+        return {
           key: `met-${x.o.objectID}`,
           title: x.o.title || 'Untitled',
           artist: x.o.artistDisplayName,
-          era: term,
+          era,
+          eras: movements,
           date: x.o.objectDate || '',
           medium: x.o.medium || '',
           img: x.img,
           source: 'The Metropolitan Museum of Art',
           sourceUrl: x.o.objectURL || `https://www.metmuseum.org/art/collection/search/${x.o.objectID}`,
           sourceSearchUrl: `https://www.metmuseum.org/art/collection/search?q=${encodeURIComponent(x.o.artistDisplayName)}`
-        }));
+        };
+      });
+      return verified.filter(Boolean);
     } catch(e){ return []; }
   }
 

@@ -244,6 +244,19 @@
     return year >= (range[0] - MOVEMENT_YEAR_BUFFER) && year <= (range[1] + MOVEMENT_YEAR_BUFFER);
   }
 
+  // ---------------- PAINTING FILTER: SECONDARY SAFETY NET ----------------
+  // Primary painting filtering happens per-source against each museum's own
+  // object-type field (AIC: artwork_type_title, Met: classification,
+  // Cleveland: type) — an exact match against "Painting"/"Paintings" is
+  // reliable most of the time. This is the fallback for the records a
+  // museum still mislabels: if the medium/technique text itself names a
+  // non-painting material, reject it regardless of what the type field said.
+  const NON_PAINTING_MEDIUM_PATTERN = /ceramic|porcelain|\bbronze\b|\bmarble\b|terra[- ]?cotta|pottery|stoneware|earthenware|\brelief\b|\bstatue\b|\bsculpture\b|glazed|\bclay\b|\bphotograph/i;
+
+  function isLikelyNonPaintingMedium(text){
+    return text ? NON_PAINTING_MEDIUM_PATTERN.test(text) : false;
+  }
+
   const HEART_PATH = "M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z";
 
   const LOADING_LINES = [

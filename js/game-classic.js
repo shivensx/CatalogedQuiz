@@ -98,7 +98,7 @@
         artist: a.artist,
         era: a.era,
         artistRight: a.artist === art.artist,
-        eraRight: a.era === art.era
+        eraRight: (art.eras || [art.era]).includes(a.era)
       }))
     ]);
     while(options.length < 4){

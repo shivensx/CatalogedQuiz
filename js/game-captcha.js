@@ -34,12 +34,11 @@
   // Picks one artwork for a tile, excluding anything already showing
   // elsewhere in the grid so the same piece never appears twice at once.
   function pickCaptchaArt(matchTarget, excludeKeys){
-    const byEra = eraGroups();
     let candidates;
     if(matchTarget){
-      candidates = (byEra[state.captchaTarget] || []).filter(a => !excludeKeys.includes(a.key));
+      candidates = state.pool.filter(a => (a.eras || [a.era]).includes(state.captchaTarget) && !excludeKeys.includes(a.key));
     } else {
-      candidates = state.pool.filter(a => a.era !== state.captchaTarget && !excludeKeys.includes(a.key));
+      candidates = state.pool.filter(a => !(a.eras || [a.era]).includes(state.captchaTarget) && !excludeKeys.includes(a.key));
     }
     if(!candidates.length) candidates = state.pool.filter(a => !excludeKeys.includes(a.key));
     if(!candidates.length) candidates = state.pool;
@@ -110,7 +109,7 @@
     state.captchaLocked.add(idx);
 
     const art = state.captchaTiles[idx];
-    const correct = art.era === state.captchaTarget;
+    const correct = (art.eras || [art.era]).includes(state.captchaTarget);
     const tileEl = document.querySelector(`.captcha-tile[data-idx="${idx}"]`);
     tileEl.classList.add('locked', correct ? 'flash-correct' : 'flash-wrong');
     tileEl.querySelector('.captcha-mark').textContent = correct ? '✓' : '✕';
