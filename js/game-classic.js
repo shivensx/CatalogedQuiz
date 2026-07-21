@@ -44,17 +44,13 @@
 
     state.health = 10;
     state.correctCount = 0;
-    state.usedKeys.clear();
     state.history = [];
     beginRound();
   }
 
   // ---------------- ROUND ----------------
   function buildRound(){
-    const available = state.pool.filter(a => !state.usedKeys.has(a.key));
-    const source = available.length ? available : state.pool;
-    const art = pickForRound(source);
-    state.usedKeys.add(art.key);
+    const art = dealNextArtwork();
     topUpIfLow();
 
     // Distractors are real (artist, era) pairings lifted from other actual
@@ -64,8 +60,12 @@
     // (an easy tell), and a wrong artist could get paired with a movement
     // they have nothing to do with (a Western name next to "Ukiyo-e"),
     // which gives the answer away through common sense rather than
-    // actual knowledge of the piece.
-    const candidates = shuffle(state.pool.filter(a => a.key !== art.key));
+    // actual knowledge of the piece. Recently-shown pieces (featured or
+    // decoy, anywhere in the app) are avoided too, so a decoy doesn't
+    // repeat something the player just saw a round or two ago.
+    const notRecent = state.pool.filter(a => a.key !== art.key && !isRecentlyShown(a.key));
+    const fallbackPool = state.pool.filter(a => a.key !== art.key);
+    const candidates = shuffle(notRecent.length >= 3 ? notRecent : fallbackPool);
     const usedArtists = new Set([art.artist]);
     const usedPairs = new Set([`${art.artist}|${art.era}`]);
     const distractors = [];
@@ -91,6 +91,7 @@
         distractors.push(a);
       }
     }
+    distractors.forEach(a => markShown(a.key));
 
     const options = shuffle([
       { artist: art.artist, era: art.era, artistRight: true, eraRight: true },

@@ -13,28 +13,6 @@
     return !!(img && img.complete && img.naturalWidth > 0);
   }
 
-  // Prefer an artwork whose image is already cached, so the round can
-  // render (and, in Time Attack, start its timer) without waiting on
-  // a network fetch. Falls back to any candidate if nothing is ready yet.
-  //
-  // Picks are stratified by era first, then by artwork within that era.
-  // A flat random pick across the whole pool would be dominated by
-  // whichever movements happen to have the most results (Impressionism,
-  // Baroque, etc.), crowding out narrower ones like Rococo or Fauvism.
-  // Picking the era uniformly first keeps the mix of movements roughly
-  // even over time regardless of how lopsided the underlying pool is.
-  function pickForRound(candidates){
-    const usable = candidates.filter(a => !state.brokenKeys.has(a.key));
-    const pool = usable.length ? usable : candidates;
-    const byEra = {};
-    pool.forEach(a => { (byEra[a.era] = byEra[a.era] || []).push(a); });
-    const eras = Object.keys(byEra);
-    const era = pickRandom(eras);
-    const group = byEra[era];
-    const ready = group.filter(isPreloaded);
-    return ready.length ? pickRandom(ready) : pickRandom(group);
-  }
-
   function addToPool(items){
     if(!items || !items.length) return;
     const existing = new Set(state.pool.map(a => a.key));
@@ -48,8 +26,13 @@
   }
 
   function topUpIfLow(){
-    const remaining = state.pool.length - state.usedKeys.size;
-    if(remaining < 8){
+    // Check the thinnest movement specifically, not just overall pool
+    // size — a healthy total pool could still have one or two movements
+    // running low, which is exactly the case that matters for keeping
+    // the 17-deck distribution fair.
+    const counts = TERMS.map(t => state.pool.filter(a => a.era === t).length);
+    const minCount = Math.min(...counts);
+    if(minCount < 8){
       const term = TERMS[state.termCursor % TERMS.length];
       state.termCursor++;
       fetchAIC(term).then(addToPool);
@@ -109,7 +92,7 @@
     const unique = shuffle(state.pool.map(a => thumbUrl(a.img)));
     const sequence = [];
     for(let i = 0; i < needed; i++) sequence.push(unique[i % unique.length]);
-    shuffle(sequence);
+    const shuffledSequence = shuffle(sequence);
 
     let html = '';
     let idx = 0;
@@ -118,7 +101,7 @@
       const delay = -(Math.random() * dur).toFixed(1);
       let tiles = '';
       for(let r = 0; r < tilesPerCol; r++){
-        tiles += `<img src="${sequence[idx++]}" alt="" referrerpolicy="no-referrer">`;
+        tiles += `<img src="${shuffledSequence[idx++]}" alt="" referrerpolicy="no-referrer">`;
       }
       html += `<div class="bg-col"><div class="bg-col-track" style="animation:bgScroll ${dur}s linear infinite; animation-delay:${delay}s;">${tiles}${tiles}</div></div>`;
     }

@@ -39,6 +39,11 @@
       <div class="stage-wrap">
         <h2 class="stage-title">${rules.title.toLowerCase()}</h2>
         <ul class="rules-list">${rules.items.map(i => `<li>${i}</li>`).join('')}</ul>
+        <div class="seed-field">
+          <label class="seed-label" for="seedInput">seed (optional)</label>
+          <input class="seed-input" id="seedInput" type="text" placeholder="leave blank for random" value="${state.seed || ''}">
+          <p class="seed-hint">same seed, same order of artworks — for sharing a run or, later, playing head to head.</p>
+        </div>
         <div class="rules-actions">
           <button class="btn btn-ghost" id="backBtn">back</button>
           <button class="btn btn-primary" id="beginBtn">begin</button>
@@ -46,6 +51,7 @@
       </div>`;
     document.getElementById('backBtn').addEventListener('click', renderModes);
     document.getElementById('beginBtn').addEventListener('click', () => {
+      setSeed(document.getElementById('seedInput').value.trim());
       if(state.mode === 'time') startGameTimeAttack();
       else if(state.mode === 'captcha') startGameCaptcha();
       else startGame();

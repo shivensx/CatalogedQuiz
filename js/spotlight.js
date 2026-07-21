@@ -10,7 +10,7 @@
         } catch(e){}
       }
       if(!state.pool.length) return null;
-      const art = pickForRound(state.pool);
+      const art = pickRandomArtwork(state.pool);
       await Store.set(this.KEY, JSON.stringify({ date: today, art }));
       return art;
     }
@@ -161,7 +161,7 @@
       dailyImg.addEventListener('error', async () => {
         state.brokenKeys.add(art.key);
         if(!state.pool.length) return;
-        const replacement = pickForRound(state.pool);
+        const replacement = pickRandomArtwork(state.pool);
         const today = new Date().toISOString().slice(0, 10);
         await Store.set(DailyArt.KEY, JSON.stringify({ date: today, art: replacement }));
         state.dailyArt = replacement;

@@ -12,7 +12,6 @@
 
     state.captchaCleared = 0;
     state.history = [];
-    state.usedKeys.clear();
     beginCaptchaRound();
   }
 
@@ -32,7 +31,9 @@
   }
 
   // Picks one artwork for a tile, excluding anything already showing
-  // elsewhere in the grid so the same piece never appears twice at once.
+  // elsewhere in the grid so the same piece never appears twice at once,
+  // and preferring pieces not recently shown elsewhere in the app so a
+  // tile doesn't repeat something the player just saw a round or two ago.
   function pickCaptchaArt(matchTarget, excludeKeys){
     let candidates;
     if(matchTarget){
@@ -40,9 +41,13 @@
     } else {
       candidates = state.pool.filter(a => !(a.eras || [a.era]).includes(state.captchaTarget) && !excludeKeys.includes(a.key));
     }
+    const notRecent = candidates.filter(a => !isRecentlyShown(a.key));
+    if(notRecent.length) candidates = notRecent;
     if(!candidates.length) candidates = state.pool.filter(a => !excludeKeys.includes(a.key));
     if(!candidates.length) candidates = state.pool;
-    return pickForRound(candidates);
+    const picked = pickRandomArtwork(candidates);
+    markShown(picked.key);
+    return picked;
   }
 
   function beginCaptchaRound(){

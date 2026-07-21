@@ -64,7 +64,6 @@
     state.taSeen = 0;
     state.taEnded = false;
     state.history = [];
-    state.usedKeys.clear();
 
     await renderCountdown();
     beginRoundTA();
@@ -94,17 +93,18 @@
   }
 
   function buildRoundTA(){
-    const available = state.pool.filter(a => !state.usedKeys.has(a.key));
-    const source = available.length ? available : state.pool;
-    const art = pickForRound(source);
-    state.usedKeys.add(art.key);
+    const art = dealNextArtwork();
     topUpIfLow();
 
     const others = state.pool.filter(a => a.key !== art.key);
-    const unrelatedCandidates = others.filter(o => o.artist !== art.artist && o.era !== art.era);
+    const notRecent = others.filter(o => o.artist !== art.artist && o.era !== art.era && !isRecentlyShown(o.key));
+    const unrelatedCandidates = notRecent.length
+      ? notRecent
+      : others.filter(o => o.artist !== art.artist && o.era !== art.era);
     const unrelated = unrelatedCandidates.length
       ? pickRandom(unrelatedCandidates)
       : (others.length ? pickRandom(others) : art);
+    markShown(unrelated.key);
 
     const options = shuffle([
       { artist: art.artist, era: art.era, correct: true },
@@ -124,9 +124,9 @@
   }
 
   // Starts the 5s window and its visual bar only once the artwork is
-  // actually visible — preloading (see pickForRound/preloadArt) means
-  // this fires immediately in the common case, but this is the
-  // guarantee that the clock never runs before the image does.
+  // actually visible — preloading (see preloadArt) means this fires
+  // immediately in the common case, but this is the guarantee that the
+  // clock never runs before the image does.
   function armRoundTimerTA(){
     state.roundStartTs = performance.now();
     clearTimeout(state.taTimers.roundTimeout);

@@ -75,7 +75,7 @@
       const totalPages = (data1.pagination && data1.pagination.total_pages) || 1;
       if(totalPages > 1){
         const cap = Math.min(totalPages, RANDOM_PAGE_DEPTH_CAP);
-        const randomPage = 1 + Math.floor(Math.random() * cap);
+        const randomPage = 1 + Math.floor(state.rng() * cap);
         if(randomPage !== 1){
           try{
             const res2 = await fetch(`${baseUrl}&page=${randomPage}`);
@@ -138,7 +138,7 @@
       const total = (data1.info && data1.info.total) || items.length;
       if(total > 25){
         const maxSkip = Math.min(total - 25, RANDOM_PAGE_DEPTH_CAP * 25);
-        const randomSkip = Math.floor(Math.random() * (maxSkip + 1));
+        const randomSkip = Math.floor(state.rng() * (maxSkip + 1));
         if(randomSkip > 0){
           try{
             const res2 = await fetch(`${baseUrl}&skip=${randomSkip}`);
