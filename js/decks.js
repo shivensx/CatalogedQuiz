@@ -105,17 +105,19 @@
   // growth instead of being stuck with a stale snapshot forever.
   //
   // Confident matches are shuffled among themselves and dealt first;
-  // uncertain matches (real Wikidata movement data, just not a
-  // confident single answer for this specific piece) are shuffled
-  // separately and appended at the end — still fully in play, just
-  // deprioritized rather than excluded.
+  // lower-confidence matches (real Wikidata signal, just not a clean
+  // single answer for this specific piece, or only a text-mention
+  // rather than formal P135 data) are shuffled separately within their
+  // own tier and appended after — still fully in play, just
+  // deprioritized rather than excluded. Order: high, medium, low, veryLow.
+  const CONFIDENCE_TIER_ORDER = ['high', 'medium', 'low', 'veryLow'];
+
   function ensureItemDeck(movement){
     if(state.itemDecks[movement] && state.itemDecks[movement].length) return;
     const source = currentDeckSourcePool();
     const items = source.filter(a => (a.eras || []).includes(movement) && !state.brokenKeys.has(a.key));
-    const confident = items.filter(a => a.movementConfidence === 'confident');
-    const uncertain = items.filter(a => a.movementConfidence !== 'confident');
-    state.itemDecks[movement] = shuffle(confident).concat(shuffle(uncertain));
+    const byTier = CONFIDENCE_TIER_ORDER.map(tier => shuffle(items.filter(a => a.confidenceTier === tier)));
+    state.itemDecks[movement] = byTier.flat();
   }
 
   // The main entry point for actual gameplay rounds (Classic Quiz, Time

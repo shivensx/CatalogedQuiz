@@ -1,28 +1,33 @@
   /* ============================================================
      WIKIDATA MOVEMENT VERIFICATION
      query.wikidata.org/sparql is public, unauthenticated, and
-     CORS-enabled (verified against multiple independent sources), so
-     this runs live, per-painting, in the browser, in tandem with the
+     CORS-enabled, so this runs live, per-painting, in tandem with the
      museum fetch itself — not a separate later pass.
 
-     Three lookup paths, tried in order of precision:
-     - By exact Wikidata ID (P135 direct) — used when a source exposes
-       one directly (Met's artistWikidata_URL).
-     - By ULAN ID (P245) — used for AIC, which exposes a Getty ULAN id
-       on artist records. One extra lookup to resolve the ULAN id
-       itself, then an exact match, no name-guessing involved.
-     - By name, disambiguated with a birth-year hint when available —
-       the fallback for everything else (Cleveland always; AIC/Met
-       when their more precise path comes up empty).
+     Three lookup paths, in order of precision, all converging on a
+     single QID once resolved:
+     - Direct Wikidata ID (Met's artistWikidata_URL) — exact, no
+       lookup needed.
+     - ULAN ID (AIC) — one extra query resolves ULAN -> QID, then
+       proceeds exactly as the direct-ID path.
+     - Name search (Cleveland always; AIC/Met when their faster path
+       comes up empty) — disambiguated with a birth-year hint when
+       available.
 
-     A painting Wikidata can't confidently place into one of our 17
-     movements is NOT excluded — see classifyMovementConfidence() in
-     js/config.js. It still gets included, just flagged uncertain so
-     the deck system deals it after the confident matches instead of
-     first.
+     For whichever QID gets resolved, one query pulls both P135
+     (movement) and, as a fallback signal when P135 is entirely
+     absent, the entity's own short Wikidata description — which
+     often names a movement in plain text ("French Impressionist
+     painter") even when the formal P135 statement was never filled
+     in. See classifyMovementConfidence() in js/config.js for how
+     these combine into a confidence tier. Nothing is ever excluded
+     here — this module only resolves raw signal, the confidence
+     classification and any push-to-back deck ordering happen
+     downstream.
      ============================================================ */
 
-  const WIKIDATA_MOVEMENT_CACHE = new Map(); // cache key -> string[] (matched movement names)
+  const WIKIDATA_CACHE = new Map(); // cache key -> { rawMovements, description }
+  const WIKIDATA_QID_CACHE = new Map(); // ulan id -> qid | null
 
   function wikidataCacheKey(kind, value){
     return `${kind}:${value}`;
@@ -51,30 +56,36 @@
     return matched;
   }
 
-  async function fetchMovementsByWikidataId(qid){
-    const key = wikidataCacheKey('qid', qid);
-    if(WIKIDATA_MOVEMENT_CACHE.has(key)) return WIKIDATA_MOVEMENT_CACHE.get(key);
-    const query = `SELECT ?movementLabel WHERE {
-      wd:${qid} wdt:P135 ?movement.
-      SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
-    }`;
+  async function resolveQidFromUlan(ulanId){
+    const key = wikidataCacheKey('ulan-qid', ulanId);
+    if(WIKIDATA_QID_CACHE.has(key)) return WIKIDATA_QID_CACHE.get(key);
+    const query = `SELECT ?artist WHERE { ?artist wdt:P245 "${ulanId}". } LIMIT 1`;
     const bindings = await sparqlQuery(query);
-    const result = matchMovementLabels(bindings);
-    WIKIDATA_MOVEMENT_CACHE.set(key, result);
-    return result;
+    const qid = (bindings[0] && bindings[0].artist && bindings[0].artist.value.split('/').pop()) || null;
+    WIKIDATA_QID_CACHE.set(key, qid);
+    return qid;
   }
 
-  async function fetchMovementsByUlan(ulanId){
-    const key = wikidataCacheKey('ulan', ulanId);
-    if(WIKIDATA_MOVEMENT_CACHE.has(key)) return WIKIDATA_MOVEMENT_CACHE.get(key);
-    const query = `SELECT ?movementLabel WHERE {
-      ?artist wdt:P245 "${ulanId}".
-      ?artist wdt:P135 ?movement.
-      SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+  // One query, two OPTIONAL patterns: P135 (movement) and the entity's
+  // own short description. Both optional so an artist with no P135 at
+  // all still comes back with their description intact, rather than
+  // an empty result set.
+  async function fetchMovementAndDescriptionForQid(qid){
+    const key = wikidataCacheKey('qid-full', qid);
+    if(WIKIDATA_CACHE.has(key)) return WIKIDATA_CACHE.get(key);
+    const query = `SELECT ?movementLabel ?description WHERE {
+      OPTIONAL {
+        wd:${qid} wdt:P135 ?movement.
+        SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+      }
+      OPTIONAL { wd:${qid} schema:description ?description. FILTER(LANG(?description) = "en") }
     }`;
     const bindings = await sparqlQuery(query);
-    const result = matchMovementLabels(bindings);
-    WIKIDATA_MOVEMENT_CACHE.set(key, result);
+    const rawMovements = matchMovementLabels(bindings);
+    const descRow = bindings.find(b => b.description);
+    const description = descRow ? descRow.description.value : null;
+    const result = { rawMovements, description };
+    WIKIDATA_CACHE.set(key, result);
     return result;
   }
 
@@ -99,11 +110,11 @@
     return pool[0] || null;
   }
 
-  async function fetchMovementsByName(name, birthYear){
+  async function resolveByName(name, birthYear){
     const key = wikidataCacheKey('name', `${name}|${birthYear || ''}`);
-    if(WIKIDATA_MOVEMENT_CACHE.has(key)) return WIKIDATA_MOVEMENT_CACHE.get(key);
+    if(WIKIDATA_CACHE.has(key)) return WIKIDATA_CACHE.get(key);
 
-    let result = [];
+    let result = { rawMovements: [], description: null };
     const candidates = await searchWikidataEntity(name);
     const best = pickBestWikidataCandidate(candidates, birthYear);
     if(best && best.id){
@@ -112,9 +123,11 @@
         SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
       }`;
       const bindings = await sparqlQuery(query);
-      result = matchMovementLabels(bindings);
+      // The short description from the search step itself is already
+      // free — no extra query needed for the text-fallback signal here.
+      result = { rawMovements: matchMovementLabels(bindings), description: best.description || null };
     }
-    WIKIDATA_MOVEMENT_CACHE.set(key, result);
+    WIKIDATA_CACHE.set(key, result);
     return result;
   }
 
@@ -136,20 +149,62 @@
   }
 
   // Main entry point. `artist` = { name, birthYearHint, ulanId, wikidataId }.
-  // Returns a raw string[] of matched movements (possibly empty) —
+  // Returns { rawMovements: string[], description: string|null } —
   // js/config.js's classifyMovementConfidence() turns that into a
-  // confidence level and final era/eras, it isn't decided here.
-  async function resolveArtistMovements(artist){
-    if(artist.wikidataId){
-      const viaQid = await fetchMovementsByWikidataId(artist.wikidataId);
-      if(viaQid.length) return viaQid;
+  // confidence tier and final era/eras, it isn't decided here.
+  async function resolveArtistMovementInfo(artist){
+    let qid = artist.wikidataId || null;
+    if(!qid && artist.ulanId) qid = await resolveQidFromUlan(artist.ulanId);
+
+    if(qid){
+      const info = await fetchMovementAndDescriptionForQid(qid);
+      if(info.rawMovements.length || info.description) return info;
+      // Resolved a QID but got nothing at all from it — fall through
+      // to name search rather than give up.
     }
-    if(artist.ulanId){
-      const viaUlan = await fetchMovementsByUlan(artist.ulanId);
-      if(viaUlan.length) return viaUlan;
+    if(!artist.name) return { rawMovements: [], description: null };
+    return resolveByName(artist.name, artist.birthYearHint);
+  }
+
+  // Wikidata descriptions almost always use the adjective form
+  // ("French Impressionist painter"), not the movement's own noun form
+  // ("Impressionism") — checking only the noun form would miss the
+  // large majority of real matches.
+  const MOVEMENT_ADJECTIVE_FORMS = {
+    'Renaissance': ['Renaissance'],
+    'Baroque': ['Baroque'],
+    'Rococo': ['Rococo'],
+    'Neoclassicism': ['Neoclassical', 'Neo-Classical'],
+    'Romanticism': ['Romantic'],
+    'Realism': ['Realist'],
+    'Impressionism': ['Impressionist'],
+    'Post-Impressionism': ['Post-Impressionist'],
+    'Fauvism': ['Fauvist', 'Fauve'],
+    'Expressionism': ['Expressionist'],
+    'Art Nouveau': ['Art Nouveau'],
+    'Cubism': ['Cubist'],
+    'Art Deco': ['Art Deco'],
+    'Surrealism': ['Surrealist'],
+    'Futurism': ['Futurist'],
+    'Pop Art': ['Pop Art'],
+    'Abstract Expressionism': ['Abstract Expressionist']
+  };
+
+  // Scans a short description string for any of our 17 movement names
+  // (or their adjective form) appearing directly in the text — the
+  // fallback signal when an artist has no formal P135 statement at
+  // all. Checks longer/more specific names first (e.g.
+  // "Post-Impressionist" before "Impressionist") to avoid a substring
+  // false-positive.
+  function movementMentionedInText(text){
+    if(!text) return null;
+    const lower = text.toLowerCase();
+    const sorted = [...TERMS].sort((a, b) => b.length - a.length);
+    for(const term of sorted){
+      const variants = [term, ...(MOVEMENT_ADJECTIVE_FORMS[term] || [])];
+      if(variants.some(v => lower.includes(v.toLowerCase()))) return term;
     }
-    if(!artist.name) return [];
-    return fetchMovementsByName(artist.name, artist.birthYearHint);
+    return null;
   }
 
   // Runs an async function over a list with a concurrency cap, instead

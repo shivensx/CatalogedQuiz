@@ -59,15 +59,16 @@
       return mapWithConcurrency(rawCandidates, 6, async (a) => {
         const ulanId = await fetchAICArtistUlan(a.artist_id);
         const birthYearHint = extractBirthYearHint(a.artist_display);
-        const rawMovements = await resolveArtistMovements({ name: a.artist_title, birthYearHint, ulanId });
-        const { confidence, eras } = classifyMovementConfidence(rawMovements, a.date_display);
+        const info = await resolveArtistMovementInfo({ name: a.artist_title, birthYearHint, ulanId });
+        const { tier, score, eras } = classifyMovementConfidence(info.rawMovements, a.date_display, info.description);
         return {
           key: `aic-${a.id}`,
           title: a.title || 'Untitled',
           artist: a.artist_title,
           era: eras[0] || null,
           eras,
-          movementConfidence: confidence,
+          confidenceTier: tier,
+          confidenceScore: score,
           date: a.date_display || '',
           medium: a.medium_display || '',
           origin: a.place_of_origin || '',
@@ -102,15 +103,16 @@
 
       return mapWithConcurrency(rawCandidates, 6, async (x) => {
         const birthYearHint = extractBirthYearHint(x.creatorDesc);
-        const rawMovements = await resolveArtistMovements({ name: x.artist, birthYearHint });
-        const { confidence, eras } = classifyMovementConfidence(rawMovements, x.a.creation_date);
+        const info = await resolveArtistMovementInfo({ name: x.artist, birthYearHint });
+        const { tier, score, eras } = classifyMovementConfidence(info.rawMovements, x.a.creation_date, info.description);
         return {
           key: `cma-${x.a.id}`,
           title: x.a.title || 'Untitled',
           artist: x.artist,
           era: eras[0] || null,
           eras,
-          movementConfidence: confidence,
+          confidenceTier: tier,
+          confidenceScore: score,
           date: x.a.creation_date || '',
           medium: x.a.technique || '',
           img: x.img,
@@ -147,49 +149,52 @@
   }
 
   async function fetchMetBatch(){
-    const deptId = MET_PAINTING_DEPARTMENTS[metDeptRotation % MET_PAINTING_DEPARTMENTS.length];
-    metDeptRotation++;
-    const allIds = await fetchMetDepartmentIds(deptId);
-    if(!allIds.length) return [];
+    try{
+      const deptId = MET_PAINTING_DEPARTMENTS[metDeptRotation % MET_PAINTING_DEPARTMENTS.length];
+      metDeptRotation++;
+      const allIds = await fetchMetDepartmentIds(deptId);
+      if(!allIds.length) return [];
 
-    const cursor = metDeptCursor.get(deptId) || 0;
-    const batch = allIds.slice(cursor, cursor + 24);
-    metDeptCursor.set(deptId, cursor + 24 >= allIds.length ? 0 : cursor + 24);
-    if(!batch.length) return [];
+      const cursor = metDeptCursor.get(deptId) || 0;
+      const batch = allIds.slice(cursor, cursor + 24);
+      metDeptCursor.set(deptId, cursor + 24 >= allIds.length ? 0 : cursor + 24);
+      if(!batch.length) return [];
 
-    const details = await Promise.all(batch.map(id =>
-      fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${id}`)
-        .then(r => r.ok ? r.json() : null)
-        .catch(() => null)
-    ));
+      const details = await Promise.all(batch.map(id =>
+        fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${id}`)
+          .then(r => r.ok ? r.json() : null)
+          .catch(() => null)
+      ));
 
-    const rawCandidates = details
-      .filter(Boolean)
-      .map(o => ({ o, img: o.primaryImageSmall || o.primaryImage || null }))
-      .filter(x => x.img && x.o.artistDisplayName)
-      .filter(x => x.o.classification === 'Paintings')
-      .filter(x => !isLikelyNonPaintingMedium(x.o.medium));
+      const rawCandidates = details
+        .filter(Boolean)
+        .map(o => ({ o, img: o.primaryImageSmall || o.primaryImage || null }))
+        .filter(x => x.img && x.o.artistDisplayName)
+        .filter(x => x.o.classification === 'Paintings')
+        .filter(x => !isLikelyNonPaintingMedium(x.o.medium));
 
-    return mapWithConcurrency(rawCandidates, 6, async (x) => {
-      const birthYearHint = extractBirthYearHint(x.o.artistDisplayBio);
-      const wikidataId = extractWikidataQid(x.o.artistWikidata_URL);
-      const rawMovements = await resolveArtistMovements({ name: x.o.artistDisplayName, birthYearHint, wikidataId });
-      const { confidence, eras } = classifyMovementConfidence(rawMovements, x.o.objectDate);
-      return {
-        key: `met-${x.o.objectID}`,
-        title: x.o.title || 'Untitled',
-        artist: x.o.artistDisplayName,
-        era: eras[0] || null,
-        eras,
-        movementConfidence: confidence,
-        date: x.o.objectDate || '',
-        medium: x.o.medium || '',
-        img: x.img,
-        source: 'The Metropolitan Museum of Art',
-        sourceUrl: x.o.objectURL || `https://www.metmuseum.org/art/collection/search/${x.o.objectID}`,
-        sourceSearchUrl: `https://www.metmuseum.org/art/collection/search?q=${encodeURIComponent(x.o.artistDisplayName)}`
-      };
-    });
+      return await mapWithConcurrency(rawCandidates, 6, async (x) => {
+        const birthYearHint = extractBirthYearHint(x.o.artistDisplayBio);
+        const wikidataId = extractWikidataQid(x.o.artistWikidata_URL);
+        const info = await resolveArtistMovementInfo({ name: x.o.artistDisplayName, birthYearHint, wikidataId });
+        const { tier, score, eras } = classifyMovementConfidence(info.rawMovements, x.o.objectDate, info.description);
+        return {
+          key: `met-${x.o.objectID}`,
+          title: x.o.title || 'Untitled',
+          artist: x.o.artistDisplayName,
+          era: eras[0] || null,
+          eras,
+          confidenceTier: tier,
+          confidenceScore: score,
+          date: x.o.objectDate || '',
+          medium: x.o.medium || '',
+          img: x.img,
+          source: 'The Metropolitan Museum of Art',
+          sourceUrl: x.o.objectURL || `https://www.metmuseum.org/art/collection/search/${x.o.objectID}`,
+          sourceSearchUrl: `https://www.metmuseum.org/art/collection/search?q=${encodeURIComponent(x.o.artistDisplayName)}`
+        };
+      });
+    } catch(e){ return []; }
   }
 
   // ---------------- LEARN TAB: SPECIFIC ARTWORK LOOKUPS ----------------

@@ -173,10 +173,7 @@
      ============================================================ */
   function updateChrome(){
     document.getElementById('mastheadLeft').classList.toggle('hidden', state.screen === 'landing');
-    const onLanding = state.screen === 'landing';
-    document.getElementById('bgGrid').classList.toggle('show', onLanding);
-    document.getElementById('bgOverlay').classList.toggle('show', onLanding);
-    document.getElementById('staticWall').classList.toggle('show', !onLanding);
+    document.getElementById('staticWall').classList.add('show');
   }
 
   /* ============================================================
@@ -270,16 +267,43 @@
   //               date doesn't comfortably fit any of them.
   //   none      — no P135 data on this artist at all (or nothing that
   //               maps to one of our 17 movements).
-  function classifyMovementConfidence(rawMovements, dateStr){
-    if(!rawMovements.length) return { confidence: 'none', eras: [] };
-    if(rawMovements.length === 1){
-      const ok = plausibleForMovement(rawMovements[0], dateStr);
-      return { confidence: ok ? 'confident' : 'uncertain', eras: rawMovements };
+  // Four tiers instead of a binary confident/not — "below 50% pushed
+  // back" only makes sense with an actual numeric score to compare
+  // against. Real P135 data (formal, structured) always outranks a
+  // plain-text mention, which always outranks nothing at all.
+  const CONFIDENCE_SCORE = { high: 95, medium: 65, low: 45, veryLow: 10 };
+
+  // The one place that decides a piece's movement confidence. Nothing
+  // gets thrown away here regardless of tier — a low/veryLow piece
+  // still gets a real movement (or empty eras) attached, just flagged
+  // so the deck system deals it after everything else instead of
+  // first (see js/decks.js).
+  //   high    — exactly one real P135 answer, well-dated or nothing
+  //             to disambiguate between in the first place.
+  //   medium  — real P135 data exists, but either several candidates
+  //             remain even after date-narrowing, or the date doesn't
+  //             comfortably fit any of them.
+  //   low     — no formal P135 statement at all, but the artist's own
+  //             Wikidata description mentions one of our movements by
+  //             name in plain text ("French Impressionist painter").
+  //   veryLow — no P135, no textual mention either — no real evidence
+  //             either way.
+  function classifyMovementConfidence(rawMovements, dateStr, descriptionText){
+    if(rawMovements.length){
+      if(rawMovements.length === 1){
+        const ok = plausibleForMovement(rawMovements[0], dateStr);
+        return ok
+          ? { tier: 'high', score: CONFIDENCE_SCORE.high, eras: rawMovements }
+          : { tier: 'medium', score: CONFIDENCE_SCORE.medium, eras: rawMovements };
+      }
+      const narrowed = narrowMovementsByDate(rawMovements, dateStr);
+      if(narrowed.length === 1) return { tier: 'high', score: CONFIDENCE_SCORE.high, eras: narrowed };
+      if(narrowed.length === 0) return { tier: 'medium', score: CONFIDENCE_SCORE.medium, eras: rawMovements };
+      return { tier: 'medium', score: CONFIDENCE_SCORE.medium, eras: narrowed };
     }
-    const narrowed = narrowMovementsByDate(rawMovements, dateStr);
-    if(narrowed.length === 1) return { confidence: 'confident', eras: narrowed };
-    if(narrowed.length === 0) return { confidence: 'uncertain', eras: rawMovements };
-    return { confidence: 'uncertain', eras: narrowed };
+    const textMatch = movementMentionedInText(descriptionText);
+    if(textMatch) return { tier: 'low', score: CONFIDENCE_SCORE.low, eras: [textMatch] };
+    return { tier: 'veryLow', score: CONFIDENCE_SCORE.veryLow, eras: [] };
   }
 
   // ---------------- PAINTING FILTER: SECONDARY SAFETY NET ----------------

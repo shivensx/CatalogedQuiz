@@ -61,6 +61,13 @@
      ============================================================ */
   let devCounterInterval = null;
 
+  const CONFIDENCE_TIER_META = {
+    high:    { label: 'high (real P135, well-dated)',       color: 'var(--success)' },
+    medium:  { label: 'medium (P135 exists, ambiguous fit)', color: '#d9a441' },
+    low:     { label: 'low (no P135, text mention only)',    color: '#c1684f' },
+    veryLow: { label: 'very low (no evidence at all)',       color: 'var(--danger)' }
+  };
+
   function renderDevCounters(){
     const container = document.getElementById('devCounters');
     if(!container){
@@ -73,17 +80,24 @@
       'The Metropolitan Museum of Art'
     ];
     const total = sources.reduce((sum, s) => sum + (state.sourceCounts[s] || 0), 0);
-    const confident = state.confidentMovementTotal || 0;
+    const tiers = state.confidenceTierCounts;
+    const tierTotal = Object.values(tiers).reduce((a, b) => a + b, 0) || 1; // avoid /0 before anything loads
+
     container.innerHTML = `
-      <div class="dev-counter-compare">
-        <div class="dev-counter-big">
-          <span class="dev-counter-value">${confident}</span>
-          <span class="dev-counter-label">confidently matched to a movement (real P135 data)</span>
-        </div>
-        <div class="dev-counter-big">
-          <span class="dev-counter-value">${total}</span>
-          <span class="dev-counter-label">total paintings loaded (matched + unmatched)</span>
-        </div>
+      <div class="dev-meter-total">total: <b>${total}</b> paintings loaded</div>
+      <div class="dev-meter-bar">
+        ${Object.keys(CONFIDENCE_TIER_META).map(tier => {
+          const pct = (tiers[tier] / tierTotal) * 100;
+          return pct > 0 ? `<div class="dev-meter-segment" style="width:${pct}%; background:${CONFIDENCE_TIER_META[tier].color};"></div>` : '';
+        }).join('')}
+      </div>
+      <div class="dev-meter-legend">
+        ${Object.keys(CONFIDENCE_TIER_META).map(tier => `
+          <div class="dev-meter-legend-item">
+            <span class="dev-meter-swatch" style="background:${CONFIDENCE_TIER_META[tier].color};"></span>
+            <span class="dev-meter-legend-value">${tiers[tier] || 0}</span>
+            <span class="dev-meter-legend-label">${CONFIDENCE_TIER_META[tier].label}</span>
+          </div>`).join('')}
       </div>
       <div class="dev-counter-grid">
         ${sources.map(s => `
@@ -100,7 +114,7 @@
     screenEl.innerHTML = `
       <div class="stage-wrap">
         <h2 class="stage-title">dev: live fetch counter</h2>
-        <p class="stage-body">not linked anywhere in the live site — compares how many paintings have a confident Wikidata movement match against the total loaded, live, as the background fetch keeps running.</p>
+        <p class="stage-body">not linked anywhere in the live site — breaks down movement-match confidence across four tiers as paintings load, live.</p>
         <div class="dev-counters" id="devCounters"></div>
         <div class="stage-actions">
           <button class="btn btn-ghost" id="backBtn">back</button>
