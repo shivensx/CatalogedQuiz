@@ -1,118 +1,55 @@
   /* ============================================================
      GAME POOL — MUSEUM FETCHERS
-     Three sources: AIC, Cleveland, Met. SMK, Europeana, and
-     Smithsonian stay out of the game pool (kept only for the Learn
-     tab's specific hand-picked lookups further down this file).
+     Rebuilt again, stripped further per explicit direction: no
+     movement querying, no era/eras field, no per-movement anything.
+     Each fetcher's only job is "give me more real paintings from this
+     source" — literally every painting each API has, paginated
+     continuously in the background for as long as the page stays
+     open, not searched or filtered by any topic.
 
-     Painting filtering, two layers:
-     1. PRIMARY — exact match against each source's own real
-        object-type field: AIC's artwork_type_title, Met's
-        classification, Cleveland's type. Not a substring match, not
-        a blacklist of things to exclude.
-     2. SECONDARY — a medium/technique text safety net
-        (isLikelyNonPaintingMedium, see js/config.js) for the records
-        a museum still mislabels despite the type field.
+     Painting filtering is still the exact-match check against each
+     source's own real object-type field (independently verified
+     against live data / official docs, not guessed):
+       - AIC:        artwork_type_title === 'Painting'
+       - Met:         classification === 'Paintings'
+       - Cleveland:   type === 'Painting'
+     plus the medium/technique text safety net
+     (isLikelyNonPaintingMedium, see js/config.js).
 
-     Movement verification is done live against Wikidata (see
-     js/wikidata.js) for all three sources, including AIC — even
-     though AIC has its own curator-assigned style field, Wikidata is
-     now the single cross-checked standard for all three, not just a
-     patch for the two sources that lack one. AIC additionally
-     resolves a Getty ULAN id per artist for an exact (not name-text)
-     Wikidata match; Met and Cleveland fall back to name + a
-     best-effort birth-year hint pulled from whatever bio text the
-     source provides. A piece Wikidata can't confidently classify
-     into one of our 17 movements is excluded, not force-fit — and a
-     piece can carry more than one real movement (era = the single
-     display/grouping label; eras = the full verified set, used for
-     scoring so a genuinely multi-movement piece isn't marked wrong
-     for a fair answer). The old date-range plausibility check
-     (plausibleForMovement) stays on as an additional fallback layer
-     after Wikidata's verdict, not removed.
+     Everything downstream that used to key off `era`/`eras` (the
+     movement decks, Classic Quiz's movement question, CAPTCHA's
+     movement target) is left alone on purpose, per instruction — it's
+     expected to degrade rather than function correctly until movement
+     classification gets rebuilt as its own separate step later.
+     Nothing here should throw, it just won't have movement data to
+     work with anymore.
 
-     Randomization: museum search APIs rank by relevance, so the same
-     well-known pieces would otherwise surface first every time. Each
-     fetcher below pulls a random page/offset/sample instead of
-     always taking whatever came back first.
+     Each fetcher keeps its own cursor and steps forward through the
+     source's collection a batch at a time, so repeated calls surface
+     new paintings instead of the same ones — this is what
+     startContinuousFetching() (see js/pool.js) calls on a loop.
      ============================================================ */
 
-  // How many pages/offset-steps deep a fetcher is willing to reach into
-  // a large result set. Keeps requests reasonable while still reaching
-  // well past "page 1" for movements with a lot of matching work.
-  const RANDOM_PAGE_DEPTH_CAP = 20;
-
-  // Small caches so the same artist (which often appears across multiple
-  // candidate paintings, within one fetch and across a session) only
-  // triggers the extra network round-trips once.
-  const aicUlanCache = new Map(); // AIC artist_id -> ULAN id | null
-
-  async function fetchAICArtistUlan(artistId){
-    if(!artistId) return null;
-    if(aicUlanCache.has(artistId)) return aicUlanCache.get(artistId);
-    let ulan = null;
-    try{
-      const res = await fetch(`https://api.artic.edu/api/v1/agents/${artistId}?fields=id,ulan_id`);
-      if(res.ok){
-        const data = await res.json();
-        ulan = (data.data && data.data.ulan_id) || null;
-      }
-    } catch(e){ /* ignore, falls back to name-based lookup */ }
-    aicUlanCache.set(artistId, ulan);
-    return ulan;
-  }
-
   // ---------------- FETCH: ART INSTITUTE OF CHICAGO ----------------
-  async function fetchAIC(term){
-    const fields = 'id,title,artist_title,artist_id,artist_display,date_display,image_id,place_of_origin,medium_display,artwork_type_title';
-    const baseUrl = `https://api.artic.edu/api/v1/artworks/search?q=${encodeURIComponent(term)}`
-      + `&fields=${fields}&limit=40`;
+  // The plain /artworks listing (not /search) needs no query text at
+  // all — just pages through the collection directly.
+  let aicPage = 1;
+  async function fetchAICBatch(){
+    const fields = 'id,title,artist_title,date_display,image_id,place_of_origin,medium_display,artwork_type_title';
+    const url = `https://api.artic.edu/api/v1/artworks?fields=${fields}&limit=100&page=${aicPage}`;
+    aicPage++;
     try{
-      const res1 = await fetch(`${baseUrl}&page=1`);
-      if(!res1.ok) return [];
-      const data1 = await res1.json();
-      let items = data1.data || [];
-
-      const totalPages = (data1.pagination && data1.pagination.total_pages) || 1;
-      if(totalPages > 1){
-        const cap = Math.min(totalPages, RANDOM_PAGE_DEPTH_CAP);
-        const randomPage = 1 + Math.floor(state.rng() * cap);
-        if(randomPage !== 1){
-          try{
-            const res2 = await fetch(`${baseUrl}&page=${randomPage}`);
-            if(res2.ok){
-              const data2 = await res2.json();
-              if(data2.data && data2.data.length) items = data2.data;
-            }
-          } catch(e){ /* fall back to page 1's results */ }
-        }
-      }
-
-      // Primary painting filter: exact match on AIC's real object-type
-      // field. Secondary safety net: reject anything whose medium text
-      // still names a non-painting material despite the type field.
-      const rawCandidates = items
+      const res = await fetch(url);
+      if(!res.ok) return [];
+      const data = await res.json();
+      return (data.data || [])
         .filter(a => a.image_id && a.artist_title)
         .filter(a => a.artwork_type_title === 'Painting')
-        .filter(a => !isLikelyNonPaintingMedium(a.medium_display));
-
-      const verified = await mapWithConcurrency(rawCandidates, 6, async (a) => {
-        const ulanId = await fetchAICArtistUlan(a.artist_id);
-        const birthYearHint = extractBirthYearHint(a.artist_display);
-        const rawMovements = await resolveArtistMovements({ name: a.artist_title, birthYearHint, ulanId });
-        if(!rawMovements.length) return null; // Wikidata has no confident classification — excluded, not force-fit
-        // Artist-level movements narrowed to what THIS piece's own date
-        // supports — an artist whose career spanned movements shouldn't
-        // have every piece labeled with every movement they ever touched.
-        const movements = narrowMovementsByDate(rawMovements, a.date_display);
-        if(!movements.length) return null; // none of the artist's real movements fit this piece's date — excluded, not mislabeled
-        const era = movements.includes(term) ? term : movements[0];
-        if(!plausibleForMovement(era, a.date_display)) return null;
-        return {
+        .filter(a => !isLikelyNonPaintingMedium(a.medium_display))
+        .map(a => ({
           key: `aic-${a.id}`,
           title: a.title || 'Untitled',
           artist: a.artist_title,
-          era,
-          eras: movements,
           date: a.date_display || '',
           medium: a.medium_display || '',
           origin: a.place_of_origin || '',
@@ -120,100 +57,52 @@
           source: 'Art Institute of Chicago',
           sourceUrl: `https://www.artic.edu/artworks/${a.id}`,
           sourceSearchUrl: `https://www.artic.edu/collection?q=${encodeURIComponent(a.artist_title)}`
-        };
-      });
-      return verified.filter(Boolean);
+        }));
     } catch(e){ return []; }
   }
 
   // ---------------- FETCH: CLEVELAND MUSEUM OF ART ----------------
-  async function fetchCleveland(term){
-    const baseUrl = `https://openaccess-api.clevelandart.org/api/artworks/?q=${encodeURIComponent(term)}&has_image=1&limit=40`;
+  let clevelandSkip = 0;
+  async function fetchClevelandBatch(){
+    const url = `https://openaccess-api.clevelandart.org/api/artworks/?has_image=1&limit=100&skip=${clevelandSkip}`;
+    clevelandSkip += 100;
     try{
-      const res1 = await fetch(`${baseUrl}&skip=0`);
-      if(!res1.ok) return [];
-      const data1 = await res1.json();
-      let items = data1.data || [];
-
-      const total = (data1.info && data1.info.total) || items.length;
-      if(total > 25){
-        const maxSkip = Math.min(total - 25, RANDOM_PAGE_DEPTH_CAP * 25);
-        const randomSkip = Math.floor(state.rng() * (maxSkip + 1));
-        if(randomSkip > 0){
-          try{
-            const res2 = await fetch(`${baseUrl}&skip=${randomSkip}`);
-            if(res2.ok){
-              const data2 = await res2.json();
-              if(data2.data && data2.data.length) items = data2.data;
-            }
-          } catch(e){ /* fall back to the first page's results */ }
-        }
-      }
-
-      const rawCandidates = items
+      const res = await fetch(url);
+      if(!res.ok) return [];
+      const data = await res.json();
+      return (data.data || [])
         .map(a => {
           const creatorDesc = a.creators && a.creators[0] ? a.creators[0].description : null;
           const artist = creatorDesc ? creatorDesc.split(' (')[0].trim() : null;
           const img = (a.images && (a.images.web || a.images.print)) ? (a.images.web ? a.images.web.url : a.images.print.url) : null;
-          return { a, artist, img, creatorDesc };
+          return { a, artist, img };
         })
         .filter(x => x.img && x.artist)
         .filter(x => x.a.type === 'Painting')
-        .filter(x => !isLikelyNonPaintingMedium(x.a.technique));
-
-      const verified = await mapWithConcurrency(rawCandidates, 6, async (x) => {
-        const birthYearHint = extractBirthYearHint(x.creatorDesc);
-        const rawMovements = await resolveArtistMovements({ name: x.artist, birthYearHint });
-        if(!rawMovements.length) return null;
-        const movements = narrowMovementsByDate(rawMovements, x.a.creation_date);
-        if(!movements.length) return null;
-        const era = movements.includes(term) ? term : movements[0];
-        if(!plausibleForMovement(era, x.a.creation_date)) return null;
-        return {
+        .filter(x => !isLikelyNonPaintingMedium(x.a.technique))
+        .map(x => ({
           key: `cma-${x.a.id}`,
           title: x.a.title || 'Untitled',
           artist: x.artist,
-          era,
-          eras: movements,
           date: x.a.creation_date || '',
           medium: x.a.technique || '',
           img: x.img,
           source: 'Cleveland Museum of Art',
           sourceUrl: `https://www.clevelandart.org/art/${x.a.id}`,
           sourceSearchUrl: `https://www.clevelandart.org/art/collection/search?search_api_fulltext=${encodeURIComponent(x.artist)}`
-        };
-      });
-      return verified.filter(Boolean);
+        }));
     } catch(e){ return []; }
   }
 
   // ---------------- FETCH: THE METROPOLITAN MUSEUM OF ART ----------------
-  // Met's search endpoint returns every matching object ID in one call
-  // (no pagination) rather than a page at a time, so randomization here
-  // means shuffling that full ID list before sampling from it, instead
-  // of always taking the IDs the API happened to list first.
-  // Maps each movement to the Met department it actually lives in.
-  // Sidesteps the real problem entirely instead of working around it:
-  // Met has no movement/style field anywhere in its data, so searching
-  // free text for a movement name has nowhere to actually match. This
-  // uses /objects?departmentIds=, a real documented endpoint that needs
-  // no query text at all — just returns every object in that department
-  // — and lets classification + Wikidata verification (below) do 100%
-  // of the actual movement determination, the same way it already does
-  // for AIC and Cleveland.
-  const MET_DEPARTMENT_FOR_MOVEMENT = {
-    'Renaissance': 11, 'Baroque': 11, 'Rococo': 11, 'Neoclassicism': 11,
-    'Romanticism': 11, 'Realism': 11, 'Impressionism': 11, 'Post-Impressionism': 11,
-    'Fauvism': 21, 'Expressionism': 21, 'Art Nouveau': 21, 'Cubism': 21,
-    'Art Deco': 21, 'Surrealism': 21, 'Futurism': 21, 'Pop Art': 21,
-    'Abstract Expressionism': 21
-  }; // 11 = European Paintings, 21 = Modern Art
-
-  // The full ID list for a department doesn't depend on which movement
-  // is being searched, so it's fetched once and reused — cheaper than
-  // re-querying per movement, and each department can hold thousands of
-  // objects in one lightweight response (just an ID array).
-  const metDeptIdsCache = new Map();
+  // Met has no "list every painting" endpoint directly, so this steps
+  // through the two departments confirmed to hold real paintings
+  // (European Paintings, Modern Art), cycling between them and paging
+  // through each department's full object list over time.
+  const MET_PAINTING_DEPARTMENTS = [11, 21];
+  const metDeptIdsCache = new Map();  // deptId -> full objectIDs array
+  const metDeptCursor = new Map();    // deptId -> next index to read from
+  let metDeptRotation = 0;
 
   async function fetchMetDepartmentIds(deptId){
     if(metDeptIdsCache.has(deptId)) return metDeptIdsCache.get(deptId);
@@ -221,61 +110,49 @@
       const res = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects?departmentIds=${deptId}`);
       const ids = res.ok ? ((await res.json()).objectIDs || []) : [];
       metDeptIdsCache.set(deptId, ids);
+      metDeptCursor.set(deptId, 0);
       return ids;
     } catch(e){
       metDeptIdsCache.set(deptId, []);
+      metDeptCursor.set(deptId, 0);
       return [];
     }
   }
 
-  async function fetchMet(term){
-    try{
-      const deptId = MET_DEPARTMENT_FOR_MOVEMENT[term] || 11;
-      const allIds = await fetchMetDepartmentIds(deptId);
-      if(!allIds.length) return [];
+  async function fetchMetBatch(){
+    const deptId = MET_PAINTING_DEPARTMENTS[metDeptRotation % MET_PAINTING_DEPARTMENTS.length];
+    metDeptRotation++;
+    const allIds = await fetchMetDepartmentIds(deptId);
+    if(!allIds.length) return [];
 
-      // /objects (unlike /search) has no hasImages filter, and mixes in
-      // non-paintings too, so this samples more candidates up front to
-      // leave enough real paintings standing after the filters below.
-      const ids = shuffle([...allIds]).slice(0, 35);
-      const details = await Promise.all(ids.map(id =>
-        fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${id}`)
-          .then(r => r.ok ? r.json() : null)
-          .catch(() => null)
-      ));
+    const cursor = metDeptCursor.get(deptId) || 0;
+    const batch = allIds.slice(cursor, cursor + 24);
+    metDeptCursor.set(deptId, cursor + 24 >= allIds.length ? 0 : cursor + 24); // wrap once exhausted
+    if(!batch.length) return [];
 
-      const rawCandidates = details
-        .filter(Boolean)
-        .map(o => ({ o, img: o.primaryImageSmall || o.primaryImage || null }))
-        .filter(x => x.img && x.o.artistDisplayName)
-        .filter(x => x.o.classification === 'Paintings')
-        .filter(x => !isLikelyNonPaintingMedium(x.o.medium));
+    const details = await Promise.all(batch.map(id =>
+      fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${id}`)
+        .then(r => r.ok ? r.json() : null)
+        .catch(() => null)
+    ));
 
-      const verified = await mapWithConcurrency(rawCandidates, 6, async (x) => {
-        const birthYearHint = extractBirthYearHint(x.o.artistDisplayBio);
-        const wikidataId = extractWikidataQid(x.o.artistWikidata_URL);
-        const rawMovements = await resolveArtistMovements({ name: x.o.artistDisplayName, birthYearHint, wikidataId });
-        if(!rawMovements.length) return null;
-        const movements = narrowMovementsByDate(rawMovements, x.o.objectDate);
-        if(!movements.length) return null;
-        const era = movements.includes(term) ? term : movements[0];
-        if(!plausibleForMovement(era, x.o.objectDate)) return null;
-        return {
-          key: `met-${x.o.objectID}`,
-          title: x.o.title || 'Untitled',
-          artist: x.o.artistDisplayName,
-          era,
-          eras: movements,
-          date: x.o.objectDate || '',
-          medium: x.o.medium || '',
-          img: x.img,
-          source: 'The Metropolitan Museum of Art',
-          sourceUrl: x.o.objectURL || `https://www.metmuseum.org/art/collection/search/${x.o.objectID}`,
-          sourceSearchUrl: `https://www.metmuseum.org/art/collection/search?q=${encodeURIComponent(x.o.artistDisplayName)}`
-        };
-      });
-      return verified.filter(Boolean);
-    } catch(e){ return []; }
+    return details
+      .filter(Boolean)
+      .map(o => ({ o, img: o.primaryImageSmall || o.primaryImage || null }))
+      .filter(x => x.img && x.o.artistDisplayName)
+      .filter(x => x.o.classification === 'Paintings')
+      .filter(x => !isLikelyNonPaintingMedium(x.o.medium))
+      .map(x => ({
+        key: `met-${x.o.objectID}`,
+        title: x.o.title || 'Untitled',
+        artist: x.o.artistDisplayName,
+        date: x.o.objectDate || '',
+        medium: x.o.medium || '',
+        img: x.img,
+        source: 'The Metropolitan Museum of Art',
+        sourceUrl: x.o.objectURL || `https://www.metmuseum.org/art/collection/search/${x.o.objectID}`,
+        sourceSearchUrl: `https://www.metmuseum.org/art/collection/search?q=${encodeURIComponent(x.o.artistDisplayName)}`
+      }));
   }
 
   // ---------------- LEARN TAB: SPECIFIC ARTWORK LOOKUPS ----------------
@@ -336,8 +213,8 @@
     return null;
   }
 
-  // Reuses the same per-object endpoint fetchMet() already uses for pool
-  // items — this one is a known-good, verified shape.
+  // Reuses the same per-object endpoint the pool fetchers use — this
+  // one is a known-good, verified shape.
   async function fetchMetById(id){
     try{
       const res = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${id}`);

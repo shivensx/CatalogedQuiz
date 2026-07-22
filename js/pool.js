@@ -21,26 +21,36 @@
         state.pool.push(a);
         existing.add(a.key);
         preloadArt(a);
+        state.sourceCounts[a.source] = (state.sourceCounts[a.source] || 0) + 1;
       }
     });
   }
 
+  // Movement-based topping up no longer applies (see the rebuilt
+  // fetchers) — this just makes sure the continuous background loop is
+  // running. Left as its own function since call sites throughout the
+  // game still call it before building a round.
   function topUpIfLow(){
-    // Check the thinnest movement specifically, not just overall pool
-    // size — a healthy total pool could still have one or two movements
-    // running low, which is exactly the case that matters for keeping
-    // the 17-deck distribution fair. Target depth raised from 8 to 20:
-    // given how much survival-rate loss the painting/Wikidata filter
-    // chain causes per raw candidate, stopping at 8 was cutting off
-    // background growth well before a movement had real depth.
-    const counts = TERMS.map(t => state.pool.filter(a => a.era === t).length);
-    const minCount = Math.min(...counts);
-    if(minCount < 20){
-      const term = TERMS[state.termCursor % TERMS.length];
-      state.termCursor++;
-      fetchAIC(term).then(addToPool);
-      fetchCleveland(term).then(addToPool);
-      fetchMet(term).then(addToPool);
+    startContinuousFetching();
+  }
+
+  // Runs forever once started: repeatedly asks all three sources for
+  // their next batch, in parallel, with a brief pause between rounds so
+  // it isn't hammering three APIs back to back nonstop. This is what
+  // actually keeps the pool (and the dev page's live counters) growing
+  // for as long as the page stays open, independent of anything the
+  // player is doing in a game.
+  let continuousFetchStarted = false;
+  async function startContinuousFetching(){
+    if(continuousFetchStarted) return;
+    continuousFetchStarted = true;
+    while(true){
+      await Promise.all([
+        fetchAICBatch().then(addToPool),
+        fetchClevelandBatch().then(addToPool),
+        fetchMetBatch().then(addToPool)
+      ]);
+      await new Promise(resolve => setTimeout(resolve, 400));
     }
   }
 
@@ -149,22 +159,20 @@
       built = true;
       if(state.screen !== 'round') renderBgGrid();
     };
-    const promises = [];
-    TERMS.forEach(t => {
-      // Met needs a follow-up detail fetch per result, so it's the
-      // slowest of the three — firing it the moment the page loads
-      // gives it the longest possible head start while the visitor is
-      // still just looking at the landing page, rather than waiting
-      // until a mode is actually chosen.
-      fetchMet(t).then(addToPool);
-      promises.push(fetchAIC(t).then(items => { addToPool(items); onFirstData(); }));
-      promises.push(fetchCleveland(t).then(items => { addToPool(items); onFirstData(); }));
-    });
-    Promise.allSettled(promises).then(() => {
-      if(diversified) return;
-      diversified = true;
-      if(state.screen !== 'round') diversifyBgGridOnce();
-    });
+    const checkFirstData = setInterval(() => {
+      if(state.pool.length){
+        onFirstData();
+        clearInterval(checkFirstData);
+      }
+    }, 200);
+    const checkDiversify = setInterval(() => {
+      if(state.pool.length >= 60 && !diversified){
+        diversified = true;
+        if(state.screen !== 'round') diversifyBgGridOnce();
+        clearInterval(checkDiversify);
+      }
+    }, 500);
+    startContinuousFetching();
   }
 
   /* ============================================================

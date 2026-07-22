@@ -2,6 +2,13 @@
     screen: 'landing',
     mode: null,
     pool: [],
+    // Running total of paintings actually kept from each source, for
+    // the dev page's live counter — incremented in addToPool().
+    sourceCounts: {
+      'Art Institute of Chicago': 0,
+      'Cleveland Museum of Art': 0,
+      'The Metropolitan Museum of Art': 0
+    },
     brokenKeys: new Set(), // images that failed to actually load — excluded from future picks
     // Deck-based selection (see js/decks.js) — a shuffled deck of the 17
     // movement names (dealt one at a time, reshuffled only once fully

@@ -1,13 +1,14 @@
   // ---------------- GAME START ----------------
-  const MIN_LOADING_MS = 4500;
+  const MIN_LOADING_MS = 1500;
 
   // Guarantees the loading screen (and its rotating messages) stays up
   // for at least MIN_LOADING_MS, regardless of how fast the pool loads.
-  // The extra time isn't wasted — warmPoolInBackground() already started
-  // every source the instant the page loaded, so this window is mostly
-  // spent letting images actually finish downloading (not just their
-  // JSON metadata), which is what keeps a round from showing a blank
-  // or half-loaded image.
+  // Shortened from the earlier 4500ms — that window was sized for the
+  // old per-candidate Wikidata verification chain (two extra network
+  // round trips per painting), which no longer exists. The rebuilt
+  // fetchers are a single request per source per term, so images start
+  // arriving fast; this now mostly just smooths over the brief moment
+  // between clicking "begin" and the first image finishing its own load.
   function waitMinimum(startTs){
     const remaining = MIN_LOADING_MS - (Date.now() - startTs);
     return remaining > 0 ? new Promise(resolve => setTimeout(resolve, remaining)) : Promise.resolve();
@@ -16,19 +17,14 @@
   async function ensurePool(){
     if(state.pool.length >= 4) return true;
 
-    // Seed every movement up front (AIC + Cleveland are single fast
-    // calls each) so the stratified picker above always has all
-    // terms to choose from, not just whichever four happened to be
-    // fetched first. Met is NOT re-fetched here — warmPoolInBackground()
-    // already kicked it off the moment the page loaded, and it's the
-    // slowest of the three (a search plus N detail fetches), so doing
-    // it again here would just double up on the slowest request for
-    // no benefit.
+    // Fire a handful of batches from each source up front so there's
+    // real data to start with, rather than waiting on whatever the
+    // continuous background loop has managed to gather so far.
     const promises = [];
-    TERMS.forEach(t => {
-      promises.push(fetchAIC(t).then(addToPool));
-      promises.push(fetchCleveland(t).then(addToPool));
-    });
+    for(let i = 0; i < 4; i++){
+      promises.push(fetchAICBatch().then(addToPool));
+      promises.push(fetchClevelandBatch().then(addToPool));
+    }
     await Promise.allSettled(promises);
 
     return state.pool.length >= 4;

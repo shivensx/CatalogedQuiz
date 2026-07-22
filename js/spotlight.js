@@ -44,19 +44,6 @@
       </a>`;
   }
 
-  function devCardHTML(a){
-    return `
-      <a class="mini-card" href="${a.sourceUrl}" target="_blank" rel="noopener noreferrer">
-        <img src="${a.img}" alt="" loading="lazy" referrerpolicy="no-referrer">
-        <span class="mini-meta">
-          <span class="mini-artist">${a.artist}</span>
-          ${a.title ? `<span class="mini-title">${a.title}</span>` : ''}
-          <span class="mini-era">${a.era}${a.date ? ', ' + a.date : ''}</span>
-          ${a.medium ? `<span class="mini-medium">${a.medium}</span>` : ''}
-        </span>
-      </a>`;
-  }
-
   // ================================================================
   // DEV PAGE — not linked from anywhere in the normal flow except a
   // small low-key link on the landing page. Pulls a handful of fresh
@@ -64,75 +51,37 @@
   // already in the shared gameplay pool) so it's obvious at a glance
   // whether a given source is actually returning usable data.
   // ================================================================
-  const DEV_SOURCES = [
-    { label: 'Art Institute of Chicago', fn: fetchAIC },
-    { label: 'Cleveland Museum of Art', fn: fetchCleveland },
-    { label: 'The Metropolitan Museum of Art', fn: fetchMet }
-  ];
+  /* ============================================================
+     DEV PAGE — not linked anywhere in the live site. Shows a simple
+     live counter of how many paintings each source has actually
+     contributed to the pool so far, updating in real time as the
+     continuous background fetch (see startContinuousFetching() in
+     js/pool.js) keeps pulling more in. No movement/era breakdown
+     anymore — that concept doesn't exist in the pool right now.
+     ============================================================ */
+  let devCounterInterval = null;
 
-  async function fetchDevSample(fn, count){
-    const results = [];
-    const seen = new Set();
-    for(const term of shuffle([...TERMS])){
-      if(results.length >= count) break;
-      try{
-        const items = await fn(term);
-        items.forEach(it => {
-          if(results.length < count && !seen.has(it.key)){ seen.add(it.key); results.push(it); }
-        });
-      } catch(e){}
+  function renderDevCounters(){
+    const container = document.getElementById('devCounters');
+    if(!container){
+      if(devCounterInterval){ clearInterval(devCounterInterval); devCounterInterval = null; }
+      return;
     }
-    return results;
-  }
-
-  const devDeckState = {}; // movement -> { cards: [...], index: 0 }
-
-  function buildDevDecks(){
-    TERMS.forEach(movement => {
-      const items = state.pool.filter(a => a.era === movement);
-      devDeckState[movement] = { cards: shuffle(items), index: 0 };
-    });
-  }
-
-  function devDeckCardHTML(movement){
-    const d = devDeckState[movement];
-    if(!d || !d.cards.length){
-      return `<span class="dev-deck-empty">no cards loaded yet</span>`;
-    }
-    const card = d.cards[d.index % d.cards.length];
-    return `
-      <img src="${card.img}" alt="" loading="lazy" referrerpolicy="no-referrer">
-      <span class="dev-deck-cap">
-        <span class="dev-deck-artist">${card.artist}</span>
-        <span class="dev-deck-era">${card.era}</span>
-        <span class="dev-deck-source">${card.source}</span>
-        <span class="dev-deck-count">${(d.index % d.cards.length) + 1} / ${d.cards.length}</span>
-      </span>`;
-  }
-
-  function renderDevDecks(){
-    buildDevDecks();
-    const container = document.getElementById('devDecksGrid');
-    if(!container) return;
-    container.innerHTML = TERMS.map(movement => `
-      <div class="dev-deck">
-        <div class="dev-deck-stack">
-          <div class="dev-deck-back"></div>
-          <div class="dev-deck-back2"></div>
-          <button type="button" class="dev-deck-card" data-movement="${movement}">${devDeckCardHTML(movement)}</button>
-        </div>
-        <div class="dev-deck-label">${movement}</div>
-      </div>`).join('');
-
-    container.querySelectorAll('.dev-deck-card').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const movement = btn.dataset.movement;
-        const d = devDeckState[movement];
-        if(!d || !d.cards.length) return;
-        d.index = (d.index + 1) % d.cards.length;
-        btn.innerHTML = devDeckCardHTML(movement);
-      });
-    });
+    const sources = [
+      'Art Institute of Chicago',
+      'Cleveland Museum of Art',
+      'The Metropolitan Museum of Art'
+    ];
+    const total = sources.reduce((sum, s) => sum + (state.sourceCounts[s] || 0), 0);
+    container.innerHTML = `
+      <div class="dev-counter-total">total: <b>${total}</b> paintings loaded</div>
+      <div class="dev-counter-grid">
+        ${sources.map(s => `
+          <div class="dev-counter-card">
+            <span class="dev-counter-value">${state.sourceCounts[s] || 0}</span>
+            <span class="dev-counter-label">${s}</span>
+          </div>`).join('')}
+      </div>`;
   }
 
   function renderDevPage(){
@@ -140,42 +89,23 @@
     updateChrome();
     screenEl.innerHTML = `
       <div class="stage-wrap">
-        <h2 class="stage-title">dev: api check</h2>
-        <p class="stage-body">not linked anywhere in the live site — pulls 5 fresh results directly from each source.</p>
-        <div id="devResults">${DEV_SOURCES.map(s => `
-          <div class="dev-group">
-            <h3 class="dev-group-title">${s.label}</h3>
-            <p class="dev-loading">loading…</p>
-          </div>`).join('')}</div>
-
-        <div class="dev-decks-section">
-          <div class="dev-decks-header">
-            <h3 class="dev-group-title">movement decks <span class="dev-count">(live pool — click a card to flip to the next one)</span></h3>
-            <button class="btn btn-ghost" id="refreshDecksBtn">refresh from pool</button>
-          </div>
-          <div class="dev-decks-grid" id="devDecksGrid"></div>
-        </div>
-
+        <h2 class="stage-title">dev: live fetch counter</h2>
+        <p class="stage-body">not linked anywhere in the live site — counts how many paintings each source has contributed so far, live, as the background fetch keeps running.</p>
+        <div class="dev-counters" id="devCounters"></div>
         <div class="stage-actions">
           <button class="btn btn-ghost" id="backBtn">back</button>
         </div>
       </div>`;
-    document.getElementById('backBtn').addEventListener('click', renderLanding);
-    document.getElementById('refreshDecksBtn').addEventListener('click', renderDevDecks);
-    renderDevDecks();
-
-    const groups = document.querySelectorAll('#devResults .dev-group');
-    DEV_SOURCES.forEach((s, i) => {
-      fetchDevSample(s.fn, 5).then(results => {
-        const el = groups[i];
-        if(!el) return;
-        el.innerHTML = `
-          <h3 class="dev-group-title">${s.label} <span class="dev-count">(${results.length} found)</span></h3>
-          ${results.length
-            ? `<div class="mini-grid">${results.map(devCardHTML).join('')}</div>`
-            : `<p class="dev-empty">no results — check this source</p>`}`;
-      });
+    document.getElementById('backBtn').addEventListener('click', () => {
+      if(devCounterInterval){ clearInterval(devCounterInterval); devCounterInterval = null; }
+      renderLanding();
     });
+
+    startContinuousFetching(); // make sure it's running even if this is the first screen visited
+
+    renderDevCounters();
+    if(devCounterInterval) clearInterval(devCounterInterval);
+    devCounterInterval = setInterval(renderDevCounters, 500);
   }
 
   async function renderContent(){
