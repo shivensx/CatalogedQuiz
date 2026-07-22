@@ -22,6 +22,9 @@
         existing.add(a.key);
         preloadArt(a);
         state.sourceCounts[a.source] = (state.sourceCounts[a.source] || 0) + 1;
+        if(a.movementConfidence === 'confident'){
+          state.confidentMovementTotal = (state.confidentMovementTotal || 0) + 1;
+        }
       }
     });
   }

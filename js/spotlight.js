@@ -73,8 +73,18 @@
       'The Metropolitan Museum of Art'
     ];
     const total = sources.reduce((sum, s) => sum + (state.sourceCounts[s] || 0), 0);
+    const confident = state.confidentMovementTotal || 0;
     container.innerHTML = `
-      <div class="dev-counter-total">total: <b>${total}</b> paintings loaded</div>
+      <div class="dev-counter-compare">
+        <div class="dev-counter-big">
+          <span class="dev-counter-value">${confident}</span>
+          <span class="dev-counter-label">confidently matched to a movement (real P135 data)</span>
+        </div>
+        <div class="dev-counter-big">
+          <span class="dev-counter-value">${total}</span>
+          <span class="dev-counter-label">total paintings loaded (matched + unmatched)</span>
+        </div>
+      </div>
       <div class="dev-counter-grid">
         ${sources.map(s => `
           <div class="dev-counter-card">
@@ -90,7 +100,7 @@
     screenEl.innerHTML = `
       <div class="stage-wrap">
         <h2 class="stage-title">dev: live fetch counter</h2>
-        <p class="stage-body">not linked anywhere in the live site — counts how many paintings each source has contributed so far, live, as the background fetch keeps running.</p>
+        <p class="stage-body">not linked anywhere in the live site — compares how many paintings have a confident Wikidata movement match against the total loaded, live, as the background fetch keeps running.</p>
         <div class="dev-counters" id="devCounters"></div>
         <div class="stage-actions">
           <button class="btn btn-ghost" id="backBtn">back</button>

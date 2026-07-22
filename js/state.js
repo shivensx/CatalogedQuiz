@@ -9,6 +9,11 @@
       'Cleveland Museum of Art': 0,
       'The Metropolitan Museum of Art': 0
     },
+    // Running total of paintings whose movement match was confident
+    // (see classifyMovementConfidence in js/config.js) — compared
+    // against total pool size on the dev page to see how much a
+    // strict Wikidata match actually costs.
+    confidentMovementTotal: 0,
     brokenKeys: new Set(), // images that failed to actually load — excluded from future picks
     // Deck-based selection (see js/decks.js) — a shuffled deck of the 17
     // movement names (dealt one at a time, reshuffled only once fully

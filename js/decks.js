@@ -95,7 +95,7 @@
   function ensureMovementDeck(){
     if(state.movementDeck.length) return;
     const source = currentDeckSourcePool();
-    const available = TERMS.filter(t => source.some(a => a.era === t && !state.brokenKeys.has(a.key)));
+    const available = TERMS.filter(t => source.some(a => (a.eras || []).includes(t) && !state.brokenKeys.has(a.key)));
     state.movementDeck = shuffle(available.length ? available : [...TERMS]);
   }
 
@@ -103,11 +103,19 @@
   // reshuffled — for unseeded play, background fetching keeps adding
   // items over a session, so a later reshuffle naturally picks up that
   // growth instead of being stuck with a stale snapshot forever.
+  //
+  // Confident matches are shuffled among themselves and dealt first;
+  // uncertain matches (real Wikidata movement data, just not a
+  // confident single answer for this specific piece) are shuffled
+  // separately and appended at the end — still fully in play, just
+  // deprioritized rather than excluded.
   function ensureItemDeck(movement){
     if(state.itemDecks[movement] && state.itemDecks[movement].length) return;
     const source = currentDeckSourcePool();
-    const items = source.filter(a => a.era === movement && !state.brokenKeys.has(a.key));
-    state.itemDecks[movement] = shuffle(items);
+    const items = source.filter(a => (a.eras || []).includes(movement) && !state.brokenKeys.has(a.key));
+    const confident = items.filter(a => a.movementConfidence === 'confident');
+    const uncertain = items.filter(a => a.movementConfidence !== 'confident');
+    state.itemDecks[movement] = shuffle(confident).concat(shuffle(uncertain));
   }
 
   // The main entry point for actual gameplay rounds (Classic Quiz, Time

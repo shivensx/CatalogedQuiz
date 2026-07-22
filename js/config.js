@@ -197,14 +197,15 @@
   ];
 
   // ---------------- MOVEMENT DATE VERIFICATION ----------------
-  // Cleveland and Met have no movement/style field at all, so a piece
-  // only ends up labeled e.g. "Cubism" because it surfaced when THAT
-  // museum's full-text search was queried for the word "Cubism" — a
-  // keyword-relevance match, not a real classification. That can
-  // occasionally return something wildly wrong. A rough historical
-  // date range acts as a sanity check: if the piece's own recorded
-  // creation date falls way outside where that movement could
-  // plausibly exist, it gets rejected rather than mislabeled.
+  // Rough historical windows for each movement, used to sanity-check
+  // (not determine) a Wikidata-confirmed movement against a specific
+  // piece's own recorded date. An artist can be genuinely tagged with
+  // several movements across their career (P135 is attached to the
+  // artist, not the piece) — these windows are what let us guess which
+  // of an artist's real movements actually fits a given piece, and
+  // flag it as uncertain rather than silently wrong when nothing fits
+  // confidently. Uncertain no longer means excluded — see
+  // classifyMovementConfidence() below.
   const MOVEMENT_YEAR_RANGES = {
     'Renaissance': [1350, 1620],
     'Baroque': [1580, 1750],
@@ -224,7 +225,8 @@
     'Pop Art': [1955, 1975],
     'Abstract Expressionism': [1935, 1970]
   };
-  const MOVEMENT_YEAR_BUFFER = 15; // slack for imprecise dating / stylistic overlap
+  const MOVEMENT_YEAR_BUFFER = 15; // loose slack, used for the single-movement case
+  const MOVEMENT_DISAMBIGUATION_TOLERANCE = 5; // tight slack, used to choose among several real options
 
   function extractYear(dateStr){
     if(!dateStr) return null;
@@ -232,10 +234,6 @@
     return m ? parseInt(m[1], 10) : null;
   }
 
-  // Returns false only when we have an actual date AND it's clearly
-  // outside the movement's window — a piece with no date at all is kept,
-  // since there's nothing to contradict the label (still not proof it's
-  // correct, just not disprovable from what the API gave us).
   function plausibleForMovement(term, dateStr){
     const range = MOVEMENT_YEAR_RANGES[term];
     if(!range) return true;
@@ -244,39 +242,44 @@
     return year >= (range[0] - MOVEMENT_YEAR_BUFFER) && year <= (range[1] + MOVEMENT_YEAR_BUFFER);
   }
 
-  // ---------------- MULTI-MOVEMENT DISAMBIGUATION ----------------
-  // Wikidata's P135 is attached to the ARTIST, and often lists every
-  // movement their career passed through — real and correct at the
-  // artist level, but not automatically true of any one specific piece.
-  // An artist whose style changed dramatically over time (Mondrian's
-  // early Post-Impressionist-influenced work vs. his later geometric
-  // abstraction is the case that surfaced this) would otherwise get
-  // every one of their pieces labeled with every movement they ever
-  // touched. This narrows an artist's full verified movement list down
-  // to just the one(s) whose date window the SPECIFIC piece's own
-  // recorded date actually falls in — deliberately tighter than
-  // MOVEMENT_YEAR_BUFFER above, since this is choosing among several
-  // already-confirmed-real options, not loosely sanity-checking one
-  // uncertain guess. If nothing survives the narrowing, the piece
-  // should be excluded rather than mislabeled with a movement that's
-  // only true of a different period of that artist's career.
-  const MOVEMENT_DISAMBIGUATION_TOLERANCE = 5;
-
+  // Narrows a multi-movement list down to the one(s) whose window the
+  // piece's own date actually falls in. Only meaningful when there's
+  // more than one candidate to choose between — see
+  // classifyMovementConfidence() for what happens when narrowing
+  // rules out everything (falls back to the full list, marked
+  // uncertain, rather than losing the piece).
   function narrowMovementsByDate(movements, dateStr){
-    // Nothing to disambiguate between if the artist only has one movement
-    // on Wikidata at all — the tight window below exists specifically for
-    // choosing between several real options (the Mondrian case), not for
-    // second-guessing a single, unambiguous answer. Let the looser
-    // plausibleForMovement() check (already run afterward everywhere this
-    // is called) be the actual safety net for that common case.
     if(movements.length <= 1) return movements;
     const year = extractYear(dateStr);
-    if(year == null) return movements; // nothing to narrow with — trust Wikidata's tags as-is
+    if(year == null) return movements;
     return movements.filter(m => {
       const range = MOVEMENT_YEAR_RANGES[m];
-      if(!range) return true; // no window data for this movement — don't penalize it
+      if(!range) return true;
       return year >= (range[0] - MOVEMENT_DISAMBIGUATION_TOLERANCE) && year <= (range[1] + MOVEMENT_DISAMBIGUATION_TOLERANCE);
     });
+  }
+
+  // The single place that decides confident vs uncertain for a piece.
+  // Nothing gets thrown away here — uncertain pieces still get a real
+  // movement (or set of movements) attached, just flagged so the deck
+  // system can deal them after the confident ones instead of first.
+  //   confident — exactly one real answer, well-dated or nothing to
+  //               disambiguate between in the first place.
+  //   uncertain — Wikidata has movement data, but either several real
+  //               candidates remain even after date-narrowing, or the
+  //               date doesn't comfortably fit any of them.
+  //   none      — no P135 data on this artist at all (or nothing that
+  //               maps to one of our 17 movements).
+  function classifyMovementConfidence(rawMovements, dateStr){
+    if(!rawMovements.length) return { confidence: 'none', eras: [] };
+    if(rawMovements.length === 1){
+      const ok = plausibleForMovement(rawMovements[0], dateStr);
+      return { confidence: ok ? 'confident' : 'uncertain', eras: rawMovements };
+    }
+    const narrowed = narrowMovementsByDate(rawMovements, dateStr);
+    if(narrowed.length === 1) return { confidence: 'confident', eras: narrowed };
+    if(narrowed.length === 0) return { confidence: 'uncertain', eras: rawMovements };
+    return { confidence: 'uncertain', eras: narrowed };
   }
 
   // ---------------- PAINTING FILTER: SECONDARY SAFETY NET ----------------

@@ -1,25 +1,25 @@
   /* ============================================================
      WIKIDATA MOVEMENT VERIFICATION
-     Confirmed working: query.wikidata.org/sparql is public,
-     unauthenticated, and CORS-enabled (verified against multiple
-     independent sources), so this runs live, per-candidate, in the
-     browser — not a dev-time batch script. No key, no rate-limit
-     ceiling shared across all visitors, and Wikidata's own coverage
-     keeps improving without us doing anything.
+     query.wikidata.org/sparql is public, unauthenticated, and
+     CORS-enabled (verified against multiple independent sources), so
+     this runs live, per-painting, in the browser, in tandem with the
+     museum fetch itself — not a separate later pass.
 
-     Two lookup paths:
-     - By ULAN ID (P245) — exact match, no ambiguity. Used for AIC,
-       which exposes a Getty ULAN id on artist records.
-     - By name, disambiguated with birth/death year when available —
-       used for Met and Cleveland, neither of which expose an external
-       artist ID we can match on directly.
+     Three lookup paths, tried in order of precision:
+     - By exact Wikidata ID (P135 direct) — used when a source exposes
+       one directly (Met's artistWikidata_URL).
+     - By ULAN ID (P245) — used for AIC, which exposes a Getty ULAN id
+       on artist records. One extra lookup to resolve the ULAN id
+       itself, then an exact match, no name-guessing involved.
+     - By name, disambiguated with a birth-year hint when available —
+       the fallback for everything else (Cleveland always; AIC/Met
+       when their more precise path comes up empty).
 
-     Philosophy: an artist/piece Wikidata doesn't confidently classify
-     into one of our 17 movements is excluded, not force-fit. A piece
-     can carry more than one real movement — Wikidata's P135 is
-     multi-valued by design (a real Picasso can genuinely be tagged
-     both Cubism and Surrealism), so this returns every matching
-     movement, not just one.
+     A painting Wikidata can't confidently place into one of our 17
+     movements is NOT excluded — see classifyMovementConfidence() in
+     js/config.js. It still gets included, just flagged uncertain so
+     the deck system deals it after the confident matches instead of
+     first.
      ============================================================ */
 
   const WIKIDATA_MOVEMENT_CACHE = new Map(); // cache key -> string[] (matched movement names)
@@ -38,9 +38,9 @@
     } catch(e){ return []; }
   }
 
-  // Intersects whatever movement labels Wikidata returned against our own
-  // 17-movement list — anything outside that list is simply not something
-  // this game classifies by, not an error.
+  // Intersects whatever movement labels Wikidata returned against our
+  // own 17-movement list — anything outside that list just isn't
+  // something this game classifies by, not an error.
   function matchMovementLabels(bindings){
     const labels = bindings.map(b => b.movementLabel && b.movementLabel.value).filter(Boolean);
     const matched = [];
@@ -49,6 +49,19 @@
       if(hit && !matched.includes(hit)) matched.push(hit);
     });
     return matched;
+  }
+
+  async function fetchMovementsByWikidataId(qid){
+    const key = wikidataCacheKey('qid', qid);
+    if(WIKIDATA_MOVEMENT_CACHE.has(key)) return WIKIDATA_MOVEMENT_CACHE.get(key);
+    const query = `SELECT ?movementLabel WHERE {
+      wd:${qid} wdt:P135 ?movement.
+      SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+    }`;
+    const bindings = await sparqlQuery(query);
+    const result = matchMovementLabels(bindings);
+    WIKIDATA_MOVEMENT_CACHE.set(key, result);
+    return result;
   }
 
   async function fetchMovementsByUlan(ulanId){
@@ -65,31 +78,6 @@
     return result;
   }
 
-  // Met (and possibly other sources later) expose the artist's Wikidata
-  // item directly (artistWikidata_URL, e.g. ".../wiki/Q5582") — an exact
-  // ID needs no name-search step at all, cheaper and more precise than
-  // even the ULAN path, since there's no matching/disambiguation involved.
-  async function fetchMovementsByWikidataId(qid){
-    const key = wikidataCacheKey('qid', qid);
-    if(WIKIDATA_MOVEMENT_CACHE.has(key)) return WIKIDATA_MOVEMENT_CACHE.get(key);
-    const query = `SELECT ?movementLabel WHERE {
-      wd:${qid} wdt:P135 ?movement.
-      SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
-    }`;
-    const bindings = await sparqlQuery(query);
-    const result = matchMovementLabels(bindings);
-    WIKIDATA_MOVEMENT_CACHE.set(key, result);
-    return result;
-  }
-
-  // Pulls the Q-ID out of a Wikidata URL like
-  // "https://www.wikidata.org/wiki/Q5582" -> "Q5582".
-  function extractWikidataQid(url){
-    if(!url) return null;
-    const m = String(url).match(/Q\d+/);
-    return m ? m[0] : null;
-  }
-
   async function searchWikidataEntity(name){
     const url = `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(name)}`
       + `&language=en&type=item&format=json&origin=*&limit=5`;
@@ -101,9 +89,6 @@
     } catch(e){ return []; }
   }
 
-  // Prefers a search result whose description reads like an artist, and
-  // (when we have a birth year from the museum record) whose description
-  // mentions that same year — cheap disambiguation for common names.
   function pickBestWikidataCandidate(candidates, birthYear){
     const artistLike = candidates.filter(c => c.description && /paint|artist|sculpt|draughts/i.test(c.description));
     const pool = artistLike.length ? artistLike : candidates;
@@ -133,38 +118,44 @@
     return result;
   }
 
-  // Best-effort extraction of a birth year from whatever free-text artist
-  // bio/display string a source provides (e.g. "French, 1840-1926") —
-  // used only as a disambiguation hint, not required for a match.
+  // Best-effort extraction of a birth year from whatever free-text
+  // artist bio/display string a source provides (e.g. "French,
+  // 1840-1926") — a disambiguation hint only, not required for a match.
   function extractBirthYearHint(displayText){
     if(!displayText) return null;
     const m = String(displayText).match(/(1[4-9]\d{2}|20\d{2})/);
     return m ? m[1] : null;
   }
 
-  // Main entry point. `artist` = { name, birthYearHint, ulanId }.
-  // Returns a string[] of matched movements (possibly empty — empty means
-  // "exclude this candidate," not "assume the searched term is right").
+  // Pulls the Q-ID out of a Wikidata URL like
+  // "https://www.wikidata.org/wiki/Q5582" -> "Q5582".
+  function extractWikidataQid(url){
+    if(!url) return null;
+    const m = String(url).match(/Q\d+/);
+    return m ? m[0] : null;
+  }
+
+  // Main entry point. `artist` = { name, birthYearHint, ulanId, wikidataId }.
+  // Returns a raw string[] of matched movements (possibly empty) —
+  // js/config.js's classifyMovementConfidence() turns that into a
+  // confidence level and final era/eras, it isn't decided here.
   async function resolveArtistMovements(artist){
     if(artist.wikidataId){
       const viaQid = await fetchMovementsByWikidataId(artist.wikidataId);
       if(viaQid.length) return viaQid;
-      // No P135 on this exact item — fall through rather than give up.
     }
     if(artist.ulanId){
       const viaUlan = await fetchMovementsByUlan(artist.ulanId);
       if(viaUlan.length) return viaUlan;
-      // ULAN lookup came up empty (no Wikidata item linked, or no P135 on
-      // it) — fall through to name-based rather than give up entirely.
     }
     if(!artist.name) return [];
     return fetchMovementsByName(artist.name, artist.birthYearHint);
   }
 
-  // Runs an async function over a list with a concurrency cap, instead of
-  // firing every request at once — Wikidata is robust and free, but a
-  // page that fires 50+ simultaneous lookups on load is a bad neighbor
-  // regardless, and there's no reason to risk it.
+  // Runs an async function over a list with a concurrency cap, instead
+  // of firing every request at once — Wikidata is robust and free, but
+  // a page that fires dozens of simultaneous lookups on load is a bad
+  // neighbor regardless, and there's no reason to risk it.
   async function mapWithConcurrency(items, limit, asyncFn){
     const results = new Array(items.length);
     let cursor = 0;
