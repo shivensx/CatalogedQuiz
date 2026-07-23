@@ -10,6 +10,14 @@
     if(!ok){ renderError(); return; }
     await waitMinimum(loadStart);
 
+    // CAPTCHA specifically needs at least one movement with real
+    // Wikidata-classified paintings to have any target to quiz on —
+    // ensurePool() only guarantees raw pool depth, not classified
+    // depth. Checked explicitly here rather than letting a missing
+    // target quietly show up as "undefined" in the prompt.
+    const hasClassifiedMovement = state.pool.some(a => a.eras && a.eras.length);
+    if(!hasClassifiedMovement){ renderError(); return; }
+
     state.captchaCleared = 0;
     state.history = [];
     beginCaptchaRound();
@@ -56,8 +64,13 @@
     const picked = matchTarget
       ? (sortByConfidenceTier(candidates)[0] || pickRandomArtwork(candidates))
       : pickRandomArtwork(candidates);
-    markShown(picked.key);
-    return picked;
+    // Absolute last resort — state.pool should never actually be empty
+    // by this point (ensurePool() guarantees it before a round starts),
+    // but this guarantees pickCaptchaArt itself can never return
+    // something falsy and leave a tile undefined in the grid.
+    const finalPick = picked || state.pool[0];
+    markShown(finalPick.key);
+    return finalPick;
   }
 
   function beginCaptchaRound(){

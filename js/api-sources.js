@@ -156,8 +156,8 @@
       if(!allIds.length) return [];
 
       const cursor = metDeptCursor.get(deptId) || 0;
-      const batch = allIds.slice(cursor, cursor + 24);
-      metDeptCursor.set(deptId, cursor + 24 >= allIds.length ? 0 : cursor + 24);
+      const batch = allIds.slice(cursor, cursor + 40);
+      metDeptCursor.set(deptId, cursor + 40 >= allIds.length ? 0 : cursor + 40);
       if(!batch.length) return [];
 
       const details = await Promise.all(batch.map(id =>
@@ -173,7 +173,7 @@
         .filter(x => x.o.classification === 'Paintings')
         .filter(x => !isLikelyNonPaintingMedium(x.o.medium));
 
-      return await mapWithConcurrency(rawCandidates, 6, async (x) => {
+      return await mapWithConcurrency(rawCandidates, 10, async (x) => {
         const birthYearHint = extractBirthYearHint(x.o.artistDisplayBio);
         const wikidataId = extractWikidataQid(x.o.artistWikidata_URL);
         const info = await resolveArtistMovementInfo({ name: x.o.artistDisplayName, birthYearHint, wikidataId });

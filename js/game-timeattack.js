@@ -93,8 +93,8 @@
     });
   }
 
-  function buildRoundTA(){
-    const art = dealNextArtwork();
+  function buildRoundTA(useReliableFallback){
+    const art = useReliableFallback ? (dealReliableFallbackArtwork() || dealNextArtwork()) : dealNextArtwork();
     topUpIfLow();
 
     const classifiable = state.pool.filter(a => a.eras && a.eras.length);
@@ -121,12 +121,12 @@
     return { art, options };
   }
 
-  function beginRoundTA(isRetry){
+  function beginRoundTA(isRetry, useReliableFallback){
     stopLoadingMessages();
     state.screen = 'round';
     updateChrome();
     if(!isRetry) state.imageRetryCount = 0;
-    state.current = buildRoundTA();
+    state.current = buildRoundTA(useReliableFallback);
     state.answered = false;
     renderRoundTA();
   }
@@ -169,8 +169,8 @@
       state.brokenKeys.add(art.key);
       if(state.screen !== 'round' || state.answered) return;
       state.imageRetryCount = (state.imageRetryCount || 0) + 1;
-      if(state.imageRetryCount > 3) return;
-      beginRoundTA(true);
+      if(state.imageRetryCount > 4) return;
+      beginRoundTA(true, state.imageRetryCount === 4);
     });
 
     const choicesEl = document.getElementById('choices');

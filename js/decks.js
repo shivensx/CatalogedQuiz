@@ -178,6 +178,23 @@
     return fallback;
   }
 
+  // Last-resort fallback when normal dealing keeps hitting broken
+  // images (see the image-retry-cap logic in js/game-classic.js and
+  // js/game-timeattack.js) — picks specifically from artwork whose
+  // image has ALREADY finished loading successfully, guaranteeing a
+  // working image instead of dealing another card that might also be
+  // broken or still mid-download.
+  function dealReliableFallbackArtwork(){
+    const source = currentDeckSourcePool();
+    const classifiable = source.filter(a => a.eras && a.eras.length && !state.brokenKeys.has(a.key));
+    const preloaded = classifiable.filter(isPreloaded);
+    const pool = preloaded.length ? preloaded : classifiable;
+    if(!pool.length) return null;
+    const picked = pickRandom(pool);
+    markShown(picked.key);
+    return picked;
+  }
+
   // Plain random pick (era chosen uniformly, then an item within it),
   // preferring already-preloaded images. Used where deck guarantees
   // don't apply or don't matter: the Spotlight daily pick (one piece a
@@ -186,6 +203,7 @@
   // cycling problem — CAPTCHA gets its own repeat protection via
   // isRecentlyShown at the call site instead).
   function pickRandomArtwork(candidates){
+    if(!candidates.length) return null;
     const usable = candidates.filter(a => !state.brokenKeys.has(a.key));
     const pool = usable.length ? usable : candidates;
     const byEra = {};

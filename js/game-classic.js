@@ -46,8 +46,8 @@
   }
 
   // ---------------- ROUND ----------------
-  function buildRound(){
-    const art = dealNextArtwork();
+  function buildRound(useReliableFallback){
+    const art = useReliableFallback ? (dealReliableFallbackArtwork() || dealNextArtwork()) : dealNextArtwork();
     topUpIfLow();
 
     // Distractors are real (artist, era) pairings lifted from other actual
@@ -115,12 +115,12 @@
     return { art, options };
   }
 
-  function beginRound(isRetry){
+  function beginRound(isRetry, useReliableFallback){
     stopLoadingMessages();
     state.screen = 'round';
     updateChrome();
     if(!isRetry) state.imageRetryCount = 0;
-    state.current = buildRound();
+    state.current = buildRound(useReliableFallback);
     state.answered = false;
     renderRound();
   }
@@ -147,12 +147,13 @@
       state.brokenKeys.add(art.key);
       if(state.screen !== 'round' || state.answered) return;
       state.imageRetryCount = (state.imageRetryCount || 0) + 1;
-      // A rare broken image is worth one quiet retry or two; several in
-      // a row means something's systematically off (a bad patch of the
-      // pool, a network blip) — better to stop and accept this round
-      // as-is than keep visibly rebuilding the whole thing.
-      if(state.imageRetryCount > 3) return;
-      beginRound(true);
+      // Three normal retries, then one final attempt using an image
+      // that's already confirmed to have loaded successfully rather
+      // than dealing another card that might also be broken — this is
+      // what actually resolves the case where options render fine but
+      // the image never does. Beyond that, truly out of options.
+      if(state.imageRetryCount > 4) return;
+      beginRound(true, state.imageRetryCount === 4);
     });
 
     const choicesEl = document.getElementById('choices');
