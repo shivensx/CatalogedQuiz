@@ -97,7 +97,8 @@
     const art = dealNextArtwork();
     topUpIfLow();
 
-    const others = state.pool.filter(a => a.key !== art.key);
+    const classifiable = state.pool.filter(a => a.eras && a.eras.length);
+    const others = classifiable.filter(a => a.key !== art.key);
     const notRecent = others.filter(o => o.artist !== art.artist && o.era !== art.era && !isRecentlyShown(o.key));
     const unrelatedCandidates = notRecent.length
       ? notRecent
@@ -115,10 +116,11 @@
     return { art, options };
   }
 
-  function beginRoundTA(){
+  function beginRoundTA(isRetry){
     stopLoadingMessages();
     state.screen = 'round';
     updateChrome();
+    if(!isRetry) state.imageRetryCount = 0;
     state.current = buildRoundTA();
     state.answered = false;
     renderRoundTA();
@@ -160,7 +162,10 @@
     if(img.complete && img.naturalWidth > 0) onReady();
     img.addEventListener('error', () => {
       state.brokenKeys.add(art.key);
-      if(state.screen === 'round' && !state.answered) beginRoundTA();
+      if(state.screen !== 'round' || state.answered) return;
+      state.imageRetryCount = (state.imageRetryCount || 0) + 1;
+      if(state.imageRetryCount > 3) return;
+      beginRoundTA(true);
     });
 
     const choicesEl = document.getElementById('choices');

@@ -60,8 +60,13 @@
     // actual knowledge of the piece. Recently-shown pieces (featured or
     // decoy, anywhere in the app) are avoided too, so a decoy doesn't
     // repeat something the player just saw a round or two ago.
-    const notRecent = state.pool.filter(a => a.key !== art.key && !isRecentlyShown(a.key));
-    const fallbackPool = state.pool.filter(a => a.key !== art.key);
+    // Only pieces with at least one real movement match are eligible as
+    // options — a piece Wikidata has no evidence for (era: null) has no
+    // correct answer to be quizzed on, and showing it as a decoy just
+    // means a visible "null" where a movement should be.
+    const classifiable = state.pool.filter(a => a.eras && a.eras.length);
+    const notRecent = classifiable.filter(a => a.key !== art.key && !isRecentlyShown(a.key));
+    const fallbackPool = classifiable.filter(a => a.key !== art.key);
     const candidates = shuffle(notRecent.length >= 3 ? notRecent : fallbackPool);
     const usedArtists = new Set([art.artist]);
     const usedPairs = new Set([`${art.artist}|${art.era}`]);
@@ -106,10 +111,11 @@
     return { art, options };
   }
 
-  function beginRound(){
+  function beginRound(isRetry){
     stopLoadingMessages();
     state.screen = 'round';
     updateChrome();
+    if(!isRetry) state.imageRetryCount = 0;
     state.current = buildRound();
     state.answered = false;
     renderRound();
@@ -135,7 +141,14 @@
     if(img.complete && img.naturalWidth > 0) img.classList.add('thrown');
     img.addEventListener('error', () => {
       state.brokenKeys.add(art.key);
-      if(state.screen === 'round' && !state.answered) beginRound();
+      if(state.screen !== 'round' || state.answered) return;
+      state.imageRetryCount = (state.imageRetryCount || 0) + 1;
+      // A rare broken image is worth one quiet retry or two; several in
+      // a row means something's systematically off (a bad patch of the
+      // pool, a network blip) — better to stop and accept this round
+      // as-is than keep visibly rebuilding the whole thing.
+      if(state.imageRetryCount > 3) return;
+      beginRound(true);
     });
 
     const choicesEl = document.getElementById('choices');

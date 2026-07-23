@@ -17,7 +17,10 @@
 
   function eraGroups(){
     const byEra = {};
-    state.pool.forEach(a => { (byEra[a.era] = byEra[a.era] || []).push(a); });
+    state.pool.forEach(a => {
+      if(!a.eras || !a.eras.length) return; // no real movement data — not eligible as a target or option
+      (byEra[a.era] = byEra[a.era] || []).push(a);
+    });
     return byEra;
   }
 

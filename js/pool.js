@@ -44,25 +44,33 @@
   // for as long as the page stays open, independent of anything the
   // player is doing in a game.
   let continuousFetchStarted = false;
-  async function startContinuousFetching(){
-    if(continuousFetchStarted) return;
-    continuousFetchStarted = true;
+  // Each source loops independently rather than all three being forced
+  // through one shared Promise.all — AIC and Cleveland are a single
+  // bulk request each and finish fast; Met needs 24 individual detail
+  // fetches plus a Wikidata lookup per painting and is inherently much
+  // slower. Coupling them meant AIC and Cleveland sat idle waiting on
+  // Met every single round, and Met never got to run any faster than
+  // that shared cadence allowed — throttling all three for no benefit.
+  async function runSourceLoop(fetchBatch){
     while(true){
       try{
-        await Promise.all([
-          fetchAICBatch().then(addToPool),
-          fetchClevelandBatch().then(addToPool),
-          fetchMetBatch().then(addToPool)
-        ]);
+        const items = await fetchBatch();
+        addToPool(items);
       } catch(e){
-        // Belt-and-suspenders: each fetcher already catches its own
-        // errors internally, but a single unexpected rejection here
-        // should never be able to kill the loop for every source —
-        // that's exactly what happened when one fetcher was briefly
-        // missing its own try/catch.
+        // Belt-and-suspenders — each fetcher already catches its own
+        // errors internally, but one loop's unexpected failure should
+        // never be able to take the others down with it.
       }
       await new Promise(resolve => setTimeout(resolve, 400));
     }
+  }
+
+  function startContinuousFetching(){
+    if(continuousFetchStarted) return;
+    continuousFetchStarted = true;
+    runSourceLoop(fetchAICBatch);
+    runSourceLoop(fetchClevelandBatch);
+    runSourceLoop(fetchMetBatch);
   }
 
   // ---------------- SCREEN: LANDING ----------------

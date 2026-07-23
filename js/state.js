@@ -31,6 +31,10 @@
     // surface (featured pieces, quiz decoys, CAPTCHA tiles) — used to
     // keep decoys/tiles from repeating something just shown elsewhere.
     recentlyShown: [],
+    // Caps consecutive image-error retries within one round build so a
+    // patch of broken images can't cascade into a visible rebuild loop
+    // (see beginRound() in js/game-classic.js).
+    imageRetryCount: 0,
     // Seeded RNG: defaults to Math.random (unseeded). Set via setSeed()
     // on the rules screen. Every piece of gameplay randomness (deck
     // shuffling, decoy selection, museum random-page selection) reads
