@@ -103,8 +103,13 @@
     const unrelatedCandidates = notRecent.length
       ? notRecent
       : others.filter(o => o.artist !== art.artist && o.era !== art.era);
-    const unrelated = unrelatedCandidates.length
-      ? pickRandom(unrelatedCandidates)
+    // Tier-sorted, then take the front — highest confidence available,
+    // randomized within that tier, rather than an equal-odds pick
+    // across every confidence level (see sortByConfidenceTier in
+    // js/decks.js).
+    const tierSorted = sortByConfidenceTier(unrelatedCandidates);
+    const unrelated = tierSorted.length
+      ? tierSorted[0]
       : (others.length ? pickRandom(others) : art);
     markShown(unrelated.key);
 

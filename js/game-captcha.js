@@ -48,7 +48,14 @@
     if(notRecent.length) candidates = notRecent;
     if(!candidates.length) candidates = state.pool.filter(a => !excludeKeys.includes(a.key));
     if(!candidates.length) candidates = state.pool;
-    const picked = pickRandomArtwork(candidates);
+    // A matching tile is a positive claim ("this IS the target movement")
+    // — prefer confident matches over uncertain ones, same reasoning as
+    // Classic Quiz/Time Attack decoys (see sortByConfidenceTier in
+    // js/decks.js). Non-matching tiles don't need this: confidence
+    // doesn't change whether "not the target" is a safe claim.
+    const picked = matchTarget
+      ? (sortByConfidenceTier(candidates)[0] || pickRandomArtwork(candidates))
+      : pickRandomArtwork(candidates);
     markShown(picked.key);
     return picked;
   }

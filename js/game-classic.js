@@ -61,13 +61,17 @@
     // decoy, anywhere in the app) are avoided too, so a decoy doesn't
     // repeat something the player just saw a round or two ago.
     // Only pieces with at least one real movement match are eligible as
-    // options — a piece Wikidata has no evidence for (era: null) has no
-    // correct answer to be quizzed on, and showing it as a decoy just
-    // means a visible "null" where a movement should be.
+    // options at all — a piece Wikidata has no evidence for (era: null)
+    // has no correct answer to be quizzed on. Beyond that, candidates
+    // are ordered by the same confidence-tier priority the featured-
+    // piece deck uses (see sortByConfidenceTier in js/decks.js) — a
+    // decoy drawn from a shaky low-confidence match undermines the
+    // question just as much as the featured piece would, so this isn't
+    // just deck-fairness, it applies here too.
     const classifiable = state.pool.filter(a => a.eras && a.eras.length);
     const notRecent = classifiable.filter(a => a.key !== art.key && !isRecentlyShown(a.key));
     const fallbackPool = classifiable.filter(a => a.key !== art.key);
-    const candidates = shuffle(notRecent.length >= 3 ? notRecent : fallbackPool);
+    const candidates = sortByConfidenceTier(notRecent.length >= 3 ? notRecent : fallbackPool);
     const usedArtists = new Set([art.artist]);
     const usedPairs = new Set([`${art.artist}|${art.era}`]);
     const distractors = [];

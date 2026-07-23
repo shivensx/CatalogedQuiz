@@ -110,14 +110,27 @@
   // rather than formal P135 data) are shuffled separately within their
   // own tier and appended after — still fully in play, just
   // deprioritized rather than excluded. Order: high, medium, low, veryLow.
-  const CONFIDENCE_TIER_ORDER = ['high', 'medium', 'low', 'veryLow'];
+  // veryLow means no real eras at all (see classifyMovementConfidence in
+  // js/config.js) — nothing to show as a movement, so it's not a real
+  // tier to draw from here, just excluded outright. high/medium/low are
+  // the three real tiers, each shuffled separately and concatenated in
+  // priority order — this is the one place that decides "confident
+  // matches first, weaker ones only if needed," reused by both the
+  // featured-piece deck below AND decoy/distractor selection in the
+  // game modes (see buildRound in js/game-classic.js and buildRoundTA
+  // in js/game-timeattack.js) — both need the same "prefer confident,
+  // fall back to weaker only if necessary" behavior, not just the deck.
+  const CONFIDENCE_TIER_ORDER = ['high', 'medium', 'low'];
+
+  function sortByConfidenceTier(items){
+    return CONFIDENCE_TIER_ORDER.map(tier => shuffle(items.filter(a => a.confidenceTier === tier))).flat();
+  }
 
   function ensureItemDeck(movement){
     if(state.itemDecks[movement] && state.itemDecks[movement].length) return;
     const source = currentDeckSourcePool();
     const items = source.filter(a => (a.eras || []).includes(movement) && !state.brokenKeys.has(a.key));
-    const byTier = CONFIDENCE_TIER_ORDER.map(tier => shuffle(items.filter(a => a.confidenceTier === tier)));
-    state.itemDecks[movement] = byTier.flat();
+    state.itemDecks[movement] = sortByConfidenceTier(items);
   }
 
   // The main entry point for actual gameplay rounds (Classic Quiz, Time
